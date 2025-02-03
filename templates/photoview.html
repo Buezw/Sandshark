@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>分文件夹加载图片相册（预生成缩略图+滑条调节+预览原图+侧边栏切换）</title>
+  <style>
+    /* 全局重置 */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: Arial, sans-serif;
+      background: #121212;
+      color: #f0f0f0;
+    }
+    /* 整体布局：左侧边栏 + 右侧主内容 */
+    .container {
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+    }
+    /* 左侧边栏 */
+    .sidebar {
+      width: 250px;
+      background: linear-gradient(135deg, #0d47a1, #1976d2);
+      padding: 20px;
+      overflow-y: auto;
+      transition: transform 0.3s ease, width 0.3s ease, padding 0.3s ease;
+    }
+    .sidebar.hidden {
+      transform: translateX(-250px);
+      width: 0;
+      padding: 0;
+    }
+    .sidebar h2 {
+      margin-bottom: 10px;
+      font-size: 1.5em;
+    }
+    .folder-item {
+      padding: 8px;
+      background: #1976d2;
+      margin-bottom: 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      text-align: center;
+      transition: background 0.3s;
+    }
+    .folder-item:hover {
+      background: #0d47a1;
+    }
+    .folder-button {
+      background: #1976d2;
+      border: none;
+      padding: 10px;
+      color: #fff;
+      border-radius: 5px;
+      cursor: pointer;
+      margin-bottom: 20px;
+      width: 100%;
+    }
+    /* 右侧主内容 */
+    .main {
+      flex: 1;
+      padding: 20px;
+      overflow-y: auto;
+      transition: width 0.3s ease;
+    }
+    /* 主内容标题区域 */
+    .main-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      border-bottom: 1px solid #1976d2;
+      padding-bottom: 10px;
+    }
+    .main-header h1 {
+      font-size: 1.8em;
+      margin-right: 20px;
+    }
+    .slider-container {
+      display: flex;
+      align-items: center;
+      margin-right: 20px;
+    }
+    .slider-container label {
+      margin-right: 5px;
+    }
+    .slider-container input[type="range"] {
+      margin-right: 5px;
+    }
+    .main-header button {
+      background: #1976d2;
+      border: none;
+      padding: 8px 12px;
+      color: #fff;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    /* 图片展示区 */
+    .album {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .album img {
+      height: 300px;
+      width: auto;
+      border: 2px solid #1976d2;
+      border-radius: 5px;
+      opacity: 0;
+      transform: scale(0.8);
+      transition: transform 0.5s ease, opacity 0.5s ease;
+      background: #000;
+      cursor: pointer;
+    }
+    .cool-enter {
+      opacity: 1 !important;
+      transform: scale(1) !important;
+    }
+    /* 预览层 */
+    #previewModal {
+      display: none;
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.8);
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+    }
+    #previewModal img {
+      max-width: 90%;
+      max-height: 90%;
+      border: 2px solid #fff;
+      border-radius: 5px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- 左侧边栏 -->
+    <aside class="sidebar" id="sidebar">
+      <button class="folder-button" id="refreshFolders">刷新相册</button>
+      <div id="folderList">
+        <!-- 动态列出所有子文件夹 -->
+      </div>
+    </aside>
+    <!-- 右侧主内容 -->
+    <main class="main">
+      <div class="main-header">
+        <h1 id="folderTitle">请选择子文件夹</h1>
+        <div class="slider-container">
+          <label for="sizeSlider">图片高度：</label>
+          <input type="range" id="sizeSlider" min="300" max="600" value="300" step="10">
+          <span id="sliderValue">300</span>px
+        </div>
+        <button id="toggleSidebar">隐藏侧边栏</button>
+      </div>
+      <div class="album" id="album">
+        <!-- 点击子文件夹后加载该文件夹下的缩略图 -->
+      </div>
+    </main>
+  </div>
+  
+  <!-- 预览原图的模态层 -->
+  <div id="previewModal">
+    <img id="previewImage" src="" alt="原图预览">
+  </div>
+
+  <script>
+    // 全局加载任务标识，每次加载新文件夹时递增
+    let currentLoadId = 0;
+    // 存储后端返回的文件夹数据，格式为 { 文件夹名: [文件名, ...] }
+    let folderGroups = {};
+
+    // 使用 IntersectionObserver 懒加载缩略图（直接从 thumbnails 目录读取）
+    const lazyLoadObserver = new IntersectionObserver((entries, observer) => {
+      entries.forEach(entry => {
+        const img = entry.target;
+        if (img.dataset.loadId != currentLoadId) {
+          observer.unobserve(img);
+          return;
+        }
+        if (entry.isIntersecting) {
+          const thumbSrc = img.getAttribute('data-thumb');
+          if (thumbSrc) {
+            img.src = thumbSrc;
+            img.classList.add('cool-enter');
+          }
+          observer.unobserve(img);
+        }
+      });
+    }, { rootMargin: "100px" });
+
+    // 从后端 API 加载文件夹数据
+    function loadFolders() {
+      fetch('/api/folders')
+        .then(response => response.json())
+        .then(data => {
+          folderGroups = data;
+          updateSidebar();
+          document.getElementById('folderTitle').textContent = '请选择子文件夹';
+          document.getElementById('album').innerHTML = '';
+        })
+        .catch(err => {
+          console.error('加载文件夹数据失败', err);
+        });
+    }
+
+    // 更新左侧边栏列表
+    function updateSidebar() {
+      const folderListDiv = document.getElementById('folderList');
+      folderListDiv.innerHTML = '';
+      for (let folder in folderGroups) {
+        if (folderGroups[folder].length > 0) {
+          const folderItem = document.createElement('div');
+          folderItem.className = 'folder-item';
+          folderItem.textContent = `${folder} (${folderGroups[folder].length})`;
+          folderItem.addEventListener('click', () => loadFolderImages(folder));
+          folderListDiv.appendChild(folderItem);
+        }
+      }
+    }
+
+    // 加载选中文件夹下的图片（读取预生成的缩略图），点击时加载原图
+    function loadFolderImages(folder) {
+      currentLoadId++;  // 每次加载新文件夹时更新任务标识
+      const thisLoadId = currentLoadId;
+      const albumDiv = document.getElementById('album');
+      albumDiv.innerHTML = '';  // 清空上次加载内容
+      document.getElementById('folderTitle').textContent = folder;
+      const files = folderGroups[folder] || [];
+      files.forEach(filename => {
+        const img = document.createElement('img');
+        img.style.height = sizeSlider.value + 'px';
+        // 缩略图 URL（预生成的缩略图存放在 static/thumbnails 下）
+        const thumbnailSrc = `/static/thumbnails/${folder}/${filename}`;
+        // 原图 URL
+        const originalSrc = `/static/images/${folder}/${filename}`;
+        img.setAttribute('data-thumb', thumbnailSrc);
+        img.setAttribute('data-original', originalSrc);
+        img.dataset.loadId = thisLoadId;
+        albumDiv.appendChild(img);
+        lazyLoadObserver.observe(img);
+        // 点击图片时显示原图预览
+        img.addEventListener('click', () => {
+          showPreview(originalSrc);
+        });
+      });
+    }
+
+    // 滑条调节图片高度（同时更新当前显示图片的高度）
+    const sizeSlider = document.getElementById('sizeSlider');
+    const sliderValueSpan = document.getElementById('sliderValue');
+    sizeSlider.addEventListener('input', () => {
+      const newHeight = sizeSlider.value;
+      sliderValueSpan.textContent = newHeight;
+      document.querySelectorAll('.album img').forEach(img => {
+        img.style.height = newHeight + 'px';
+      });
+    });
+
+    // 显示预览原图的模态层
+    function showPreview(src) {
+      const modal = document.getElementById('previewModal');
+      const previewImg = document.getElementById('previewImage');
+      previewImg.src = src;
+      modal.style.display = 'flex';
+      modal.onclick = function() {
+        modal.style.display = 'none';
+        previewImg.src = "";
+      }
+    }
+
+    // 切换侧边栏显示与隐藏
+    document.getElementById('toggleSidebar').addEventListener('click', () => {
+      const sidebar = document.getElementById('sidebar');
+      sidebar.classList.toggle('hidden');
+      document.getElementById('toggleSidebar').textContent =
+        sidebar.classList.contains('hidden') ? '显示侧边栏' : '隐藏侧边栏';
+    });
+
+    // 刷新文件夹数据按钮
+    document.getElementById('refreshFolders').addEventListener('click', loadFolders);
+
+    // 页面加载时自动加载文件夹数据
+    document.addEventListener('DOMContentLoaded', loadFolders);
+  </script>
+</body>
+</html>

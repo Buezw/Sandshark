@@ -1,0 +1,2 @@
+处理失败： e:\OneDrive\Gits\Sandshark\static\images\猫猫\1.png cannot identify image file 'e:\\OneDrive\\Gits\\Sandshark\\static\\images\\猫猫\\1.png'
+处理失败： e:\OneDrive\Gits\Sandshark\static\images\猫猫\1.png cannot identify image file 'e:\\OneDrive\\Gits\\Sandshark\\static\\images\\猫猫\\1.png'

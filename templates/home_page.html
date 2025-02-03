@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>多层效果与JSON事件日历</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      background: #111;
+      overflow: hidden;
+    }
+    canvas { display: block; }
+    /* 日历区域样式 */
+    #calendar {
+      position: absolute;
+      font-family: 'Courier New', monospace;
+      background: rgba(135,206,235,0.5);
+      color: #87CEEB;
+      border: 1px solid #87CEEB;
+      border-radius: 5px;
+      overflow: hidden;
+    }
+    #calendar table {
+      border-collapse: collapse;
+      width: 100%;
+      height: 100%;
+      table-layout: fixed;
+    }
+    #calendar caption {
+      font-size: 1.2em;
+      margin-bottom: 5px;
+    }
+    #calendar th, #calendar td {
+      border: 1px solid rgba(135,206,235,0.7);
+      text-align: center;
+      vertical-align: top;
+      padding: 2px;
+      word-wrap: break-word;
+    }
+    #calendar th {
+      background: rgba(135,206,235,0.2);
+    }
+    .event { color: #FF0; font-size: 0.8em; }
+  </style>
+</head>
+<body>
+  <!-- canvas 动画区域（动画代码可根据需要添加，这里只保留日历部分示例） -->
+  <canvas id="aiCanvas"></canvas>
+  <!-- 日历区域 -->
+  <div id="calendar"></div>
+  
+  <script>
+    // 全局事件对象，将在加载 JSON 后赋值
+    let events = {};
+
+    // 使用 fetch 从 events.json 文件中加载事件数据
+    fetch('/static/events.json')
+      .then(response => response.json())
+      .then(data => {
+        events = data;
+        const today = new Date();
+        generateCalendar(today.getFullYear(), today.getMonth());
+      })
+      .catch(err => {
+        console.error("加载事件数据失败:", err);
+        // 如果加载失败，依然生成空数据日历
+        const today = new Date();
+        generateCalendar(today.getFullYear(), today.getMonth());
+      });
+
+    // 生成当前月份日历，并将对应日期的事件直接嵌入单元格中
+    function generateCalendar(year, month) {
+      const calendarDiv = document.getElementById('calendar');
+      const monthNames = ["一月", "二月", "三月", "四月", "五月", "六月",
+                          "七月", "八月", "九月", "十月", "十一月", "十二月"];
+      let html = `<table>
+        <caption>${year}年 ${monthNames[month]}</caption>
+        <thead>
+          <tr>
+            <th>一</th>
+            <th>二</th>
+            <th>三</th>
+            <th>四</th>
+            <th>五</th>
+            <th>六</th>
+            <th>日</th>
+          </tr>
+        </thead>
+        <tbody>`;
+      // 获取当月第一天星期几（JavaScript 中 0 表示星期日）
+      const firstDay = new Date(year, month, 1).getDay();
+      // 以星期一作为第一天，计算偏移量
+      const offset = (firstDay + 6) % 7;
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      let date = 1;
+      for (let i = 0; i < 6; i++) {
+        html += "<tr>";
+        for (let j = 0; j < 7; j++) {
+          if (i === 0 && j < offset) {
+            html += "<td></td>";
+          } else if (date > daysInMonth) {
+            html += "<td></td>";
+          } else {
+            // 格式化月份和日期
+            const m = (month + 1) < 10 ? "0" + (month + 1) : month + 1;
+            const d = date < 10 ? "0" + date : date;
+            const fullDate = `${year}-${m}-${d}`;
+            let cellContent = `${date}`;
+            if (events[fullDate]) {
+              events[fullDate].forEach(ev => {
+                cellContent += `<div class="event">${ev}</div>`;
+              });
+            }
+            html += `<td data-date="${fullDate}">${cellContent}</td>`;
+            date++;
+          }
+        }
+        html += "</tr>";
+        if (date > daysInMonth) break;
+      }
+      html += "</tbody></table>";
+      calendarDiv.innerHTML = html;
+    }
+    
+    /* 以下为 canvas 动画示例代码（保留原有动画效果，可根据实际需要调整） */
+    const canvas = document.getElementById("aiCanvas");
+    const ctx = canvas.getContext("2d");
+    let width, height, centerX, centerY, baseRadius;
+    const calendarDiv = document.getElementById("calendar");
+
+    function resize() {
+      width = canvas.width = window.innerWidth;
+      height = canvas.height = window.innerHeight;
+      // 将圆心设为画布左侧（占宽度 30%）
+      centerX = width * 0.3;
+      centerY = height / 2;
+      baseRadius = Math.min(width, height) * 0.3;
+      
+      // 设置日历区域为与圆直径一致，并放在右侧（右侧边距 150px）
+      const dia = baseRadius * 2;
+      calendarDiv.style.width = dia + "px";
+      calendarDiv.style.height = dia + "px";
+      calendarDiv.style.top = (centerY - baseRadius) + "px";
+      calendarDiv.style.left = (width - dia - 150) + "px";
+    }
+    window.addEventListener("resize", resize);
+    resize();
+    
+    const layers = [
+      { factor: 0.5, type: "static" },
+      { factor: 0.75, type: "pulsate" },
+      { factor: 1.0, type: "ripple" },
+      { factor: 1.25, type: "rotatingArc" }
+    ];
+    let time = 0;
+    function drawConcentricLayers() {
+      layers.forEach(layer => {
+        const r = baseRadius * layer.factor;
+        let alpha = 0.15;
+        if (layer.type === "pulsate") {
+          alpha = 0.1 + 0.1 * Math.abs(Math.sin(time));
+        }
+        const grad = ctx.createRadialGradient(centerX, centerY, r * 0.1, centerX, centerY, r);
+        grad.addColorStop(0, "rgba(0,209,255," + (alpha + 0.1) + ")");
+        grad.addColorStop(0.8, "rgba(0,105,200," + alpha + ")");
+        grad.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, r, 0, Math.PI * 2);
+        ctx.fillStyle = grad;
+        ctx.fill();
+    
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, r, 0, Math.PI * 2);
+        ctx.strokeStyle = "rgba(0,209,255," + (alpha + 0.2) + ")";
+        ctx.lineWidth = 2;
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = "#00d1ff";
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+    
+        if (layer.type === "ripple") {
+          let rippleAlpha = 0.3 * Math.abs(Math.sin(time * 2));
+          ctx.beginPath();
+          ctx.arc(centerX, centerY, r + 3 * Math.abs(Math.sin(time * 2)), 0, Math.PI * 2);
+          ctx.strokeStyle = "rgba(0,209,255," + rippleAlpha + ")";
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+    
+          ctx.save();
+          ctx.translate(centerX, centerY);
+          const arcAngle = Math.PI / 2;
+          const startAngle = time;
+          ctx.beginPath();
+          ctx.arc(0, 0, r * 0.8, startAngle, startAngle + arcAngle, false);
+          ctx.strokeStyle = "#FFFF00";
+          ctx.lineWidth = 3;
+          ctx.shadowBlur = 15;
+          ctx.shadowColor = "#FFFF00";
+          ctx.stroke();
+          ctx.restore();
+        }
+    
+        if (layer.type === "rotatingArc") {
+          const arcAngle = Math.PI / 2;
+          let startAngle = time;
+          ctx.beginPath();
+          ctx.arc(centerX, centerY, r, startAngle, startAngle + arcAngle, false);
+          ctx.strokeStyle = "rgba(0,209,255,0.8)";
+          ctx.lineWidth = 4;
+          ctx.shadowBlur = 20;
+          ctx.shadowColor = "#00d1ff";
+          ctx.stroke();
+          ctx.shadowBlur = 0;
+        }
+      });
+    }
+    
+    class Node {
+      constructor() {
+        const angle = Math.random() * Math.PI * 2;
+        const r = Math.random() * baseRadius * 0.75;
+        this.x = centerX + r * Math.cos(angle);
+        this.y = centerY + r * Math.sin(angle);
+        this.vx = (Math.random() - 0.5) * 1.5;
+        this.vy = (Math.random() - 0.5) * 1.5;
+        this.radius = Math.random() * 2 + 1;
+      }
+      update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        const dx = this.x - centerX;
+        const dy = this.y - centerY;
+        if (Math.hypot(dx, dy) > baseRadius * 0.75) {
+          this.vx *= -1;
+          this.vy *= -1;
+          this.x += this.vx * 2;
+          this.y += this.vy * 2;
+        }
+      }
+      draw(ctx) {
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fillStyle = "#00d1ff";
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = "#00d1ff";
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      }
+    }
+    
+    const nodes = [];
+    const nodeCount = 80;
+    for (let i = 0; i < nodeCount; i++) {
+      nodes.push(new Node());
+    }
+    const maxLinkDistance = baseRadius * 0.4;
+    
+    function animate() {
+      time += 0.01;
+      ctx.clearRect(0, 0, width, height);
+    
+      drawConcentricLayers();
+      ctx.globalCompositeOperation = "lighter";
+      for (let node of nodes) {
+        node.update();
+        node.draw(ctx);
+      }
+      for (let i = 0; i < nodeCount; i++) {
+        for (let j = i + 1; j < nodeCount; j++) {
+          const dx = nodes[i].x - nodes[j].x;
+          const dy = nodes[i].y - nodes[j].y;
+          const dist = Math.hypot(dx, dy);
+          if (dist < maxLinkDistance) {
+            ctx.beginPath();
+            ctx.moveTo(nodes[i].x, nodes[i].y);
+            ctx.lineTo(nodes[j].x, nodes[j].y);
+            ctx.strokeStyle = "rgba(0,209,255," + (1 - dist / maxLinkDistance) + ")";
+            ctx.lineWidth = 1;
+            ctx.stroke();
+          }
+        }
+      }
+      ctx.globalCompositeOperation = "source-over";
+    
+      const now = new Date();
+      const month = now.getMonth() + 1;
+      const day = now.getDate();
+      const timeStr = now.toLocaleTimeString();
+      const displayStr = month + "/" + day + " " + timeStr;
+    
+      ctx.save();
+      ctx.font = "48px 'Courier New', monospace";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "top";
+      ctx.fillStyle = "#FFFF00";
+      ctx.shadowColor = "#000000";
+      ctx.shadowBlur = 10;
+      const textY = centerY + baseRadius * 1.25 + 10;
+      ctx.fillText(displayStr, centerX, textY);
+      ctx.restore();
+    
+      requestAnimationFrame(animate);
+    }
+    animate();
+  </script>
+</body>
+</html>
