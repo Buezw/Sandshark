@@ -2,3 +2,5 @@ static/
 sandshark_env/
 backup/
 __pycache__/
+thumbnail_errors.txt
+.gitignore
