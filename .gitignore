@@ -1,5 +1,7 @@
-static/
+flask_app/static
 sandshark_env/
 backup/
-__pycache__/
+flask_app/__pycache__/
 thumbnail_errors.txt
+electron/node_modules
+SandShark.xmind
