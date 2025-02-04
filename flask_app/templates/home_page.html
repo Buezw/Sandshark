@@ -2,249 +2,205 @@
 <html lang="zh">
 <head>
   <meta charset="UTF-8">
-  <title>多层效果与JSON事件日历 + 内置浏览器（BrowserView版）</title>
+  <title>综合应用：主页 / 日历 / 浏览器</title>
   <style>
-    html, body {
-      margin: 0;
-      padding: 0;
+    /* 公共样式 */
+    html, body { margin: 0; padding: 0; width: 100%; height: 100%; }
+
+    /* 原始 UI 样式（主页、日历） */
+    #originalUI {
+      position: relative;
       width: 100%;
       height: 100%;
       background: #111;
       overflow: hidden;
     }
-    /* 主容器 */
-    #mainContainer {
-      position: relative;
-      width: 100%;
-      height: 100%;
-    }
-    /* canvas区域 */
-    #canvasContainer {
-      position: absolute;
-      width: 100%;
-      height: 100%;
-      z-index: 1000;
-    }
-    /* 顶部菜单栏 */
+    #canvasContainer { position: absolute; width: 100%; height: 100%; z-index: 1000; }
+    #aiCanvas { width: 100%; height: 100%; }
     #topMenu {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 60px;
-      background: #00d1ff;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 4000;
-      transition: transform 0.5s ease;
+      position: absolute; top: 0; left: 0; width: 100%; height: 60px;
+      background: #00d1ff; display: flex; align-items: center; justify-content: center;
+      z-index: 4000; transition: transform 0.5s ease;
     }
-    #topMenu.hidden {
-      transform: translateY(-100%);
-    }
+    #topMenu.hidden { transform: translateY(-100%); }
     #topMenu button {
-      background: transparent;
-      border: none;
-      color: #fff;
-      font-size: 16px;
-      cursor: pointer;
-      margin: 0 20px;
-      padding: 5px 10px;
+      background: transparent; border: none; color: #fff; font-size: 16px;
+      cursor: pointer; margin: 0 20px; padding: 5px 10px;
     }
-    /* 其他区域：包含日历 */
-    #otherContainer {
-      position: absolute;
-      top: 60px;
-      left: 0;
-      width: 100%;
-      height: calc(100% - 60px);
-      z-index: 3000;
-    }
-    .fly-out {
-      animation: flyOutDown 0.5s forwards;
-    }
-    .fly-in {
-      animation: flyInUp 0.5s forwards;
-    }
-    @keyframes flyOutDown {
-      from { transform: translateY(0); opacity: 1; }
-      to   { transform: translateY(100vh); opacity: 0; }
-    }
-    @keyframes flyInUp {
-      from { transform: translateY(-100vh); opacity: 0; }
-      to   { transform: translateY(0); opacity: 1; }
-    }
-    /* 日历区域 */
+    #otherContainer { position: absolute; top: 60px; left: 0; width: 100%; height: calc(100% - 60px); z-index: 3000; }
+    /* 此处将日历宽高固定为 300px，可根据需要调整 */
     #calendarContainer {
       position: absolute;
+      width: 700px;
+      height: 750px;
+      box-sizing: border-box;
       font-family: 'Courier New', monospace;
       background: rgba(135,206,235,0.5);
       color: #87CEEB;
       border: 1px solid #87CEEB;
       border-radius: 5px;
       overflow: hidden;
+      margin: 0;
+      padding: 0;
     }
-    #calendarContainer table {
-      border-collapse: collapse;
-      width: 100%;
-      height: 100%;
-      table-layout: fixed;
-    }
-    #calendarContainer caption {
-      font-size: 1.2em;
-      margin-bottom: 5px;
-    }
-    #calendarContainer th, #calendarContainer td {
-      border: 1px solid rgba(135,206,235,0.7);
-      text-align: center;
-      vertical-align: top;
-      padding: 2px;
-      word-wrap: break-word;
-    }
-    #calendarContainer th {
-      background: rgba(135,206,235,0.2);
-    }
-    .event {
-      color: #FF0;
-      font-size: 0.8em;
-    }
-    /* 圆心按钮 */
+
+
     #menuToggle {
-      position: absolute;
-      z-index: 5000;
-      background: transparent;
-      border: none;
-      color: transparent;
-      cursor: pointer;
-      border-radius: 50%;
-      width: 80px;
-      height: 80px;
-      user-select: none;
+      position: absolute; z-index: 5000;
+      background: transparent; border: none; cursor: pointer;
+      border-radius: 50%; width: 80px; height: 80px; user-select: none;
     }
+
+    /* 浏览器 UI 样式 */
+    #browserUI {
+      display: none;
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      background: #fff; z-index: 5000; overflow: hidden;
+    }
+    #browserTopMenu {
+      height: 60px; background: #00d1ff; display: flex; align-items: center; padding: 0 10px;
+    }
+    #browserTopMenu button { margin-right: 10px; padding: 5px 10px; cursor: pointer; }
+    #addressInput { flex: 1; height: 30px; font-size: 16px; padding: 0 5px; }
+    #tabBar {
+      height: 40px; background: #ddd; display: flex; align-items: center; overflow-x: auto; padding: 0 5px;
+    }
+    .tab {
+      padding: 5px 10px; margin-right: 5px; background: #fff; border: 1px solid #ccc;
+      border-radius: 3px; cursor: pointer; display: flex; align-items: center;
+    }
+    .tab.active { background: #eee; border-bottom: 2px solid #00d1ff; }
+    .tab span.close { margin-left: 5px; color: red; cursor: pointer; }
+    #bookmarksBar {
+      height: 40px; background: #f5f5f5; display: flex; align-items: center; overflow-x: auto; padding: 0 5px;
+    }
+    .bookmark {
+      padding: 5px 10px; margin-right: 5px; background: #fff; border: 1px solid #ccc;
+      border-radius: 3px; cursor: pointer;
+    }
+    #historyPanel {
+      position: absolute; top: 140px; right: 10px; width: 300px; max-height: 400px;
+      background: #fff; border: 1px solid #ccc; overflow-y: auto; display: none; z-index: 10000;
+    }
+    #historyPanel h3 { margin: 0; padding: 10px; background: #eee; border-bottom: 1px solid #ccc; }
+    #historyList { list-style: none; margin: 0; padding: 10px; }
+    #historyList li { padding: 5px 0; border-bottom: 1px solid #ddd; cursor: pointer; }
   </style>
 </head>
 <body>
-  <div id="mainContainer">
-    <!-- Canvas区域 -->
+  <!-- 原始 UI：主页 / 日历 -->
+  <div id="originalUI">
     <div id="canvasContainer">
       <canvas id="aiCanvas"></canvas>
     </div>
-    <!-- 顶部菜单栏 -->
     <div id="topMenu" class="hidden">
       <button id="btnHome">主页</button>
-      <button id="btnSchedule">日程</button>
+      <button id="btnSchedule">日历</button>
       <button id="btnBrowser">浏览器</button>
     </div>
-    <!-- 其他区域：包含日历 -->
     <div id="otherContainer">
       <div id="calendarContainer"></div>
     </div>
-    <!-- 圆心按钮 -->
     <button id="menuToggle"></button>
   </div>
-  
+
+  <!-- 浏览器 UI：多标签、地址栏、收藏、历史 -->
+  <div id="browserUI">
+    <div id="browserTopMenu">
+      <button id="newTabBtn">新标签</button>
+      <input id="addressInput" type="text" placeholder="输入网址" />
+      <button id="goBtn">前往</button>
+      <button id="bookmarkBtn">添加收藏</button>
+      <button id="historyBtn">历史</button>
+      <button id="exitBrowserBtn">退出浏览器</button>
+    </div>
+    <div id="tabBar"></div>
+    <div id="bookmarksBar"></div>
+    <div id="historyPanel">
+      <h3>历史记录</h3>
+      <ul id="historyList"></ul>
+    </div>
+  </div>
+
   <script>
     const { ipcRenderer } = require('electron');
 
-    /***********************
-     * 日历与 canvas 代码
-     ***********************/
-    let currentMode = "schedule";  // "home" 或 "schedule" 模式
-    let events = {};
+    // 缓存 DOM 元素
+    const originalUI = document.getElementById("originalUI");
+    const browserUI = document.getElementById("browserUI");
+    const topMenu = document.getElementById("topMenu");
+    const canvas = document.getElementById("aiCanvas");
+    const ctx = canvas.getContext("2d");
+    const calendarContainer = document.getElementById("calendarContainer");
+    const menuToggle = document.getElementById("menuToggle");
+    const btnHome = document.getElementById("btnHome");
+    const btnSchedule = document.getElementById("btnSchedule");
+    const btnBrowser = document.getElementById("btnBrowser");
+    const otherContainer = document.getElementById("otherContainer");
+
+    // 浏览器 UI 元素
+    const newTabBtn = document.getElementById("newTabBtn");
+    const addressInput = document.getElementById("addressInput");
+    const goBtn = document.getElementById("goBtn");
+    const bookmarkBtn = document.getElementById("bookmarkBtn");
+    const historyBtn = document.getElementById("historyBtn");
+    const exitBrowserBtn = document.getElementById("exitBrowserBtn");
+    const tabBar = document.getElementById("tabBar");
+    const bookmarksBar = document.getElementById("bookmarksBar");
+    const historyPanel = document.getElementById("historyPanel");
+    const historyList = document.getElementById("historyList");
+
+    // 全局变量
+    let currentMode = "home"; // "home" 或 "schedule" 模式
+    let activeTabId = null;
     let nodes = [];
     const nodeCount = 80;
     let targetCenterX = 0;
     let animCenterX = 0;
     let prevAnimCenterX;
-    
-    fetch('/static/events.json')
+    let time = 0;
+    let events = {}; // 用于存储 events.json 中的数据
+
+    // 读取 events.json 数据（请确保路径正确，如 /static/events.json）
+    fetch('../static/events.json')
       .then(response => response.json())
       .then(data => {
         events = data;
-        const today = new Date();
-        generateCalendar(today.getFullYear(), today.getMonth());
+        // 若当前处于日历模式，则重新生成日历
+        if(currentMode === "schedule"){
+          generateCalendar(new Date().getFullYear(), new Date().getMonth());
+        }
       })
       .catch(err => {
-        console.error("加载事件数据失败:", err);
-        const today = new Date();
-        generateCalendar(today.getFullYear(), today.getMonth());
+        console.error("加载 events.json 失败:", err);
+        events = {};
       });
-      
-    function generateCalendar(year, month) {
-      const calendarDiv = document.getElementById('calendarContainer');
-      const monthNames = ["一月", "二月", "三月", "四月", "五月", "六月",
-                          "七月", "八月", "九月", "十月", "十一月", "十二月"];
-      let html = `<table>
-        <caption>${year}年 ${monthNames[month]}</caption>
-        <thead>
-          <tr>
-            <th>一</th>
-            <th>二</th>
-            <th>三</th>
-            <th>四</th>
-            <th>五</th>
-            <th>六</th>
-            <th>日</th>
-          </tr>
-        </thead>
-        <tbody>`;
-      const firstDay = new Date(year, month, 1).getDay();
-      const offset = (firstDay + 6) % 7;
-      const daysInMonth = new Date(year, month + 1, 0).getDate();
-      let date = 1;
-      for (let i = 0; i < 6; i++) {
-        html += "<tr>";
-        for (let j = 0; j < 7; j++) {
-          if (i === 0 && j < offset) {
-            html += "<td></td>";
-          } else if (date > daysInMonth) {
-            html += "<td></td>";
-          } else {
-            const m = (month + 1) < 10 ? "0" + (month + 1) : month + 1;
-            const d = date < 10 ? "0" + date : date;
-            const fullDate = `${year}-${m}-${d}`;
-            let cellContent = `${date}`;
-            if (events[fullDate]) {
-              events[fullDate].forEach(ev => {
-                cellContent += `<div class="event">${ev}</div>`;
-              });
-            }
-            html += `<td data-date="${fullDate}">${cellContent}</td>`;
-            date++;
-          }
-        }
-        html += "</tr>";
-        if (date > daysInMonth) break;
-      }
-      html += "</tbody></table>";
-      calendarDiv.innerHTML = html;
-    }
-    
-    const canvas = document.getElementById("aiCanvas");
-    const ctx = canvas.getContext("2d");
-    let width, height, centerY, baseRadius;
-    const calendarDiv = document.getElementById("calendarContainer");
-    const menuToggle = document.getElementById("menuToggle");
-    
-    function resize() {
-      width = canvas.width = window.innerWidth;
-      height = canvas.height = window.innerHeight;
-      centerY = height / 2;
-      baseRadius = Math.min(width, height) * 0.3;
-      
+
+    // 原始 UI —— resize 计算
+    function resizeOriginal() {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      canvas.width = w;
+      canvas.height = h;
+      const centerY = h / 2;
+      const baseRadius = Math.min(w, h) * 0.3;
+
       if (currentMode === "home") {
-        targetCenterX = width / 2;
-        calendarDiv.style.display = "none";
+        targetCenterX = w / 2;
+        calendarContainer.style.display = "none";
       } else if (currentMode === "schedule") {
-        targetCenterX = width * 0.3;
-        calendarDiv.style.display = "block";
-        const dia = baseRadius * 2;
-        calendarDiv.style.width = dia + "px";
-        calendarDiv.style.height = dia + "px";
-        calendarDiv.style.top = (centerY - baseRadius) + "px";
-        calendarDiv.style.left = (width - dia - 150) + "px";
+        targetCenterX = w * 0.3;
+        calendarContainer.style.display = "block";
+        // 此处固定日历尺寸为 300px * 300px
+        calendarContainer.style.width = "700px";
+        calendarContainer.style.height = "750px";
+        calendarContainer.style.top = ((h - 800) / 2) + "px";
+        calendarContainer.style.left = (w - 700 - 100) + "px";
+
+        // 生成日历内容（会根据 events 数据显示事件）
+        generateCalendar(new Date().getFullYear(), new Date().getMonth());
       }
-      if (!prevAnimCenterX) {
+      if (prevAnimCenterX === undefined) {
         animCenterX = targetCenterX;
         prevAnimCenterX = animCenterX;
       }
@@ -254,14 +210,78 @@
       menuToggle.style.left = (animCenterX - btnRadius) + "px";
       menuToggle.style.top = (centerY - btnRadius) + "px";
     }
-    window.addEventListener("resize", resize);
-    
+    window.addEventListener("resize", resizeOriginal);
+
+    // 日历生成函数（包含事件显示）
+    function generateCalendar(year, month) {
+      const monthNames = ["一月", "二月", "三月", "四月", "五月", "六月",
+                          "七月", "八月", "九月", "十月", "十一月", "十二月"];
+      // 计算第一天对应的星期（调整为周一为第一天）
+      const firstDay = new Date(year, month, 1).getDay();
+      const offset = (firstDay + 6) % 7;
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      // 计算总单元格数与所需行数
+      const totalCells = offset + daysInMonth;
+      const rows = Math.ceil(totalCells / 7);
+
+      let html = `<table style="width:100%; height:100%; table-layout: fixed; border-collapse: collapse; margin:0; padding:0;">
+        <caption style="text-align:center; font-size:18px; margin:0; padding:2px 0;">${year}年 ${monthNames[month]}</caption>
+        <thead>
+          <tr>
+            <th style="border:1px solid #87CEEB; margin:0; padding:0;">一</th>
+            <th style="border:1px solid #87CEEB; margin:0; padding:0;">二</th>
+            <th style="border:1px solid #87CEEB; margin:0; padding:0;">三</th>
+            <th style="border:1px solid #87CEEB; margin:0; padding:0;">四</th>
+            <th style="border:1px solid #87CEEB; margin:0; padding:0;">五</th>
+            <th style="border:1px solid #87CEEB; margin:0; padding:0;">六</th>
+            <th style="border:1px solid #87CEEB; margin:0; padding:0;">日</th>
+          </tr>
+        </thead>
+        <tbody>`;
+      let date = 1;
+      for (let i = 0; i < rows; i++) {
+        html += `<tr style="height: calc(100% / ${rows}); margin:0; padding:0;">`;
+        for (let j = 0; j < 7; j++) {
+          // 判断是否为空单元格（空白区域或超出月份天数）
+          if ((i === 0 && j < offset) || date > daysInMonth) {
+            html += `<td style="border:1px solid #87CEEB; margin:0; padding:0; overflow: hidden;"></td>`;
+          } else {
+            const m = (month + 1) < 10 ? "0" + (month + 1) : (month + 1);
+            const d = date < 10 ? "0" + date : date;
+            const fullDate = `${year}-${m}-${d}`;
+            let cellContent = `<div style="position: relative; width:100%; height:100%;">`;
+            // 日期数字固定在左上角，不受事件内容影响
+            cellContent += `<div style="position: absolute; top: 0; left: 0; padding:2px; font-weight:bold;">${date}</div>`;
+            // 事件区域，从距离顶部20px处开始，确保日期数字位置固定
+            cellContent += `<div style="position: absolute; top:20px; left:0; right:0; bottom:0; overflow: hidden; font-size:12px; white-space: nowrap; text-overflow: ellipsis;">`;
+            if (events[fullDate]) {
+              events[fullDate].forEach(ev => {
+                cellContent += `<div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${ev}</div>`;
+              });
+            }
+            cellContent += `</div></div>`;
+            html += `<td style="border:1px solid #87CEEB; margin:0; padding:0; overflow: hidden;">${cellContent}</td>`;
+            date++;
+          }
+        }
+        html += "</tr>";
+      }
+      html += "</tbody></table>";
+      calendarContainer.innerHTML = html;
+    }
+
+
+
+
+
+    // 节点类和初始化
     class Node {
       constructor() {
-        const angle = Math.random() * Math.PI * 2;
+        const angle = Math.random() * 2 * Math.PI;
+        const baseRadius = Math.min(window.innerWidth, window.innerHeight) * 0.3;
         const r = Math.random() * baseRadius * 0.75;
         this.x = animCenterX + r * Math.cos(angle);
-        this.y = centerY + r * Math.sin(angle);
+        this.y = (window.innerHeight / 2) + r * Math.sin(angle);
         this.vx = (Math.random() - 0.5) * 1.5;
         this.vy = (Math.random() - 0.5) * 1.5;
         this.radius = Math.random() * 2 + 1;
@@ -270,7 +290,8 @@
         this.x += this.vx;
         this.y += this.vy;
         const dx = this.x - animCenterX;
-        const dy = this.y - centerY;
+        const dy = this.y - (window.innerHeight / 2);
+        const baseRadius = Math.min(window.innerWidth, window.innerHeight) * 0.3;
         if (Math.hypot(dx, dy) > baseRadius * 0.75) {
           this.vx *= -1;
           this.vy *= -1;
@@ -288,25 +309,25 @@
         ctx.shadowBlur = 0;
       }
     }
-    
     function initNodes() {
       nodes = [];
       for (let i = 0; i < nodeCount; i++) {
         nodes.push(new Node());
       }
     }
-    
-    resize();
-    initNodes();
-    
-    const layers = [
-      { factor: 0.5, type: "static" },
-      { factor: 0.75, type: "pulsate" },
-      { factor: 1.0, type: "ripple" },
-      { factor: 1.25, type: "rotatingArc" }
-    ];
-    let time = 0;
+
+    // 绘制同心层
     function drawConcentricLayers() {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      const centerY = h / 2;
+      const baseRadius = Math.min(w, h) * 0.3;
+      const layers = [
+        { factor: 0.5, type: "static" },
+        { factor: 0.75, type: "pulsate" },
+        { factor: 1.0, type: "ripple" },
+        { factor: 1.25, type: "rotatingArc" }
+      ];
       layers.forEach(layer => {
         const r = baseRadius * layer.factor;
         let alpha = 0.15;
@@ -314,31 +335,31 @@
           alpha = 0.1 + 0.1 * Math.abs(Math.sin(time));
         }
         const grad = ctx.createRadialGradient(animCenterX, centerY, r * 0.1, animCenterX, centerY, r);
-        grad.addColorStop(0, "rgba(0,209,255," + (alpha + 0.1) + ")");
-        grad.addColorStop(0.8, "rgba(0,105,200," + alpha + ")");
+        grad.addColorStop(0, `rgba(0,209,255,${alpha + 0.1})`);
+        grad.addColorStop(0.8, `rgba(0,105,200,${alpha})`);
         grad.addColorStop(1, "rgba(0,0,0,0)");
         ctx.beginPath();
         ctx.arc(animCenterX, centerY, r, 0, Math.PI * 2);
         ctx.fillStyle = grad;
         ctx.fill();
-    
+
         ctx.beginPath();
         ctx.arc(animCenterX, centerY, r, 0, Math.PI * 2);
-        ctx.strokeStyle = "rgba(0,209,255," + (alpha + 0.2) + ")";
+        ctx.strokeStyle = `rgba(0,209,255,${alpha + 0.2})`;
         ctx.lineWidth = 2;
         ctx.shadowBlur = 15;
         ctx.shadowColor = "#00d1ff";
         ctx.stroke();
         ctx.shadowBlur = 0;
-    
+
         if (layer.type === "ripple") {
-          let rippleAlpha = 0.3 * Math.abs(Math.sin(time * 2));
+          const rippleAlpha = 0.3 * Math.abs(Math.sin(time * 2));
           ctx.beginPath();
           ctx.arc(animCenterX, centerY, r + 3 * Math.abs(Math.sin(time * 2)), 0, Math.PI * 2);
-          ctx.strokeStyle = "rgba(0,209,255," + rippleAlpha + ")";
+          ctx.strokeStyle = `rgba(0,209,255,${rippleAlpha})`;
           ctx.lineWidth = 1.5;
           ctx.stroke();
-    
+
           ctx.save();
           ctx.translate(animCenterX, centerY);
           const arcAngle = Math.PI / 2;
@@ -352,10 +373,10 @@
           ctx.stroke();
           ctx.restore();
         }
-    
+
         if (layer.type === "rotatingArc") {
           const arcAngle = Math.PI / 2;
-          let startAngle = time;
+          const startAngle = time;
           ctx.beginPath();
           ctx.arc(animCenterX, centerY, r, startAngle, startAngle + arcAngle, false);
           ctx.strokeStyle = "rgba(0,209,255,0.8)";
@@ -367,34 +388,32 @@
         }
       });
     }
-    
-    function animate() {
+
+    // 主动画循环（原始 UI）
+    function animateOriginal() {
       time += 0.01;
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      const centerY = h / 2;
+      const baseRadius = Math.min(w, h) * 0.3;
       animCenterX += (targetCenterX - animCenterX) * 0.2;
-      if (typeof prevAnimCenterX === "undefined") {
+      if (prevAnimCenterX === undefined) {
         prevAnimCenterX = animCenterX;
       } else {
         const delta = animCenterX - prevAnimCenterX;
-        for (let node of nodes) {
-          node.x += delta;
-        }
+        nodes.forEach(node => { node.x += delta; });
         prevAnimCenterX = animCenterX;
       }
-      
       const btnRadius = baseRadius * 0.8;
       menuToggle.style.left = (animCenterX - btnRadius) + "px";
       menuToggle.style.top = (centerY - btnRadius) + "px";
-      
-      ctx.clearRect(0, 0, width, height);
-      
+
+      ctx.clearRect(0, 0, w, h);
       drawConcentricLayers();
       ctx.globalCompositeOperation = "lighter";
-      for (let node of nodes) {
-        node.update();
-        node.draw(ctx);
-      }
-      for (let i = 0; i < nodeCount; i++) {
-        for (let j = i + 1; j < nodeCount; j++) {
+      nodes.forEach(node => { node.update(); node.draw(ctx); });
+      for (let i = 0; i < nodes.length; i++) {
+        for (let j = i + 1; j < nodes.length; j++) {
           const dx = nodes[i].x - nodes[j].x;
           const dy = nodes[i].y - nodes[j].y;
           const dist = Math.hypot(dx, dy);
@@ -402,77 +421,144 @@
             ctx.beginPath();
             ctx.moveTo(nodes[i].x, nodes[i].y);
             ctx.lineTo(nodes[j].x, nodes[j].y);
-            ctx.strokeStyle = "rgba(0,209,255," + (1 - dist / (baseRadius * 0.4)) + ")";
+            ctx.strokeStyle = `rgba(0,209,255,${1 - dist / (baseRadius * 0.4)})`;
             ctx.lineWidth = 1;
             ctx.stroke();
           }
         }
       }
       ctx.globalCompositeOperation = "source-over";
-      
       const now = new Date();
-      const monthAbbr = ["Jan.", "Feb.", "Mar.", "Apr.", "May", "Jun.", "Jul.", "Aug.", "Sep.", "Oct.", "Nov.", "Dec."];
-      const month = now.getMonth();
-      const day = now.getDate();
-      const timeStr = now.toLocaleTimeString();
-      const displayStr = monthAbbr[month] + day + " " + timeStr;
-      
+      const monthAbbr = ["Jan.","Feb.","Mar.","Apr.","May","Jun.","Jul.","Aug.","Sep.","Oct.","Nov.","Dec."];
+      const displayStr = `${monthAbbr[now.getMonth()]}${now.getDate()} ${now.toLocaleTimeString()}`;
       ctx.save();
       ctx.font = "48px 'Courier New', monospace";
       ctx.textAlign = "center";
       ctx.textBaseline = "top";
       ctx.fillStyle = "#FFFF00";
-      ctx.shadowColor = "#000000";
+      ctx.shadowColor = "#000";
       ctx.shadowBlur = 10;
-      const textY = centerY + baseRadius * 1.25 + 10;
-      ctx.fillText(displayStr, animCenterX, textY);
+      ctx.fillText(displayStr, animCenterX, centerY + baseRadius * 1.25 + 10);
       ctx.restore();
-      
-      requestAnimationFrame(animate);
+
+      requestAnimationFrame(animateOriginal);
     }
-    animate();
-    
-    /**************************
-     * 模式切换动画（仅针对日历部分）
-     **************************/
+    resizeOriginal();
+    initNodes();
+    animateOriginal();
+
+    // 原始 UI —— 模式切换（直接切换，不依赖动画事件）
     function switchMode(newMode) {
-      const otherContainer = document.getElementById("otherContainer");
-      otherContainer.classList.add("fly-out");
-      otherContainer.addEventListener("animationend", function handler() {
-        otherContainer.removeEventListener("animationend", handler);
-        currentMode = newMode;
-        resize();
-        initNodes();
-        otherContainer.classList.remove("fly-out");
-        otherContainer.classList.add("fly-in");
-        otherContainer.addEventListener("animationend", function handler2() {
-          otherContainer.removeEventListener("animationend", handler2);
-          otherContainer.classList.remove("fly-in");
-        });
+      currentMode = newMode;
+      resizeOriginal();
+      initNodes();
+      // 如果切换到日历模式，重新生成日历
+      if(newMode === "schedule"){
+        generateCalendar(new Date().getFullYear(), new Date().getMonth());
+      }
+    }
+    btnHome.addEventListener("click", () => { switchMode("home"); });
+    btnSchedule.addEventListener("click", () => { switchMode("schedule"); });
+    btnBrowser.addEventListener("click", () => {
+      originalUI.style.display = "none";
+      browserUI.style.display = "block";
+      ipcRenderer.invoke('create-tab', 'https://www.bilibili.com').then(tabId => {
+        activeTabId = tabId;
+        refreshTabs();
+        refreshBookmarks();
+      });
+    });
+    menuToggle.addEventListener("click", () => { topMenu.classList.toggle("hidden"); });
+    window.addEventListener("load", () => { setTimeout(() => { topMenu.classList.remove("hidden"); }, 500); });
+
+    // 浏览器 UI —— 标签、收藏、历史逻辑
+    async function refreshTabs() {
+      const tabs = await ipcRenderer.invoke('get-tabs');
+      tabBar.innerHTML = '';
+      tabs.forEach(tab => {
+        const tabElem = document.createElement('div');
+        tabElem.className = 'tab';
+        tabElem.textContent = tab.url;
+        tabElem.onclick = () => {
+          ipcRenderer.invoke('switch-tab', tab.id).then(() => {
+            activeTabId = tab.id;
+            refreshTabs();
+          });
+        };
+        if (tab.id === activeTabId) { tabElem.classList.add('active'); }
+        const closeBtn = document.createElement('span');
+        closeBtn.className = 'close';
+        closeBtn.textContent = '×';
+        closeBtn.onclick = (e) => {
+          e.stopPropagation();
+          ipcRenderer.invoke('close-tab', tab.id).then(() => { refreshTabs(); });
+        };
+        tabElem.appendChild(closeBtn);
+        tabBar.appendChild(tabElem);
       });
     }
-    
-    document.getElementById("btnHome").addEventListener("click", function() {
-      switchMode("home");
+    async function refreshBookmarks() {
+      const bookmarks = await ipcRenderer.invoke('get-bookmarks');
+      bookmarksBar.innerHTML = '';
+      bookmarks.forEach(bm => {
+        const bmElem = document.createElement('div');
+        bmElem.className = 'bookmark';
+        bmElem.textContent = bm.title || bm.url;
+        bmElem.onclick = () => {
+          ipcRenderer.invoke('create-tab', bm.url).then(tabId => {
+            activeTabId = tabId;
+            refreshTabs();
+          });
+        };
+        bookmarksBar.appendChild(bmElem);
+      });
+    }
+    newTabBtn.addEventListener('click', () => {
+      ipcRenderer.invoke('create-tab', 'https://www.bilibili.com').then(tabId => {
+        activeTabId = tabId;
+        refreshTabs();
+      });
     });
-    document.getElementById("btnSchedule").addEventListener("click", function() {
-      switchMode("schedule");
+    goBtn.addEventListener('click', () => {
+      let url = addressInput.value.trim();
+      if (url && !/^https?:\/\//i.test(url)) { url = 'http://' + url; }
+      if (activeTabId && url) {
+        ipcRenderer.invoke('navigate-to', activeTabId, url);
+        refreshTabs();
+      }
     });
-    // “浏览器”按钮：通过 IPC 发送消息给主进程切换 BrowserView 显示状态
-    document.getElementById("btnBrowser").addEventListener("click", function() {
+    bookmarkBtn.addEventListener('click', async () => {
+      const tabs = await ipcRenderer.invoke('get-tabs');
+      const currentTab = tabs.find(t => t.id === activeTabId);
+      if (currentTab) {
+        const bookmark = { title: currentTab.url, url: currentTab.url };
+        await ipcRenderer.invoke('add-bookmark', bookmark);
+        refreshBookmarks();
+      }
+    });
+    historyBtn.addEventListener('click', async () => {
+      if (historyPanel.style.display === 'block') {
+        historyPanel.style.display = 'none';
+      } else {
+        const hist = await ipcRenderer.invoke('get-history');
+        historyList.innerHTML = '';
+        hist.forEach(item => {
+          const li = document.createElement('li');
+          li.textContent = `${item.title} - ${item.url}`;
+          li.onclick = () => {
+            if (activeTabId) {
+              ipcRenderer.invoke('navigate-to', activeTabId, item.url);
+            }
+          };
+          historyList.appendChild(li);
+        });
+        historyPanel.style.display = 'block';
+      }
+    });
+    exitBrowserBtn.addEventListener('click', () => {
+      browserUI.style.display = "none";
+      originalUI.style.display = "block";
       ipcRenderer.send('toggle-browser');
-    });
-    
-    // 圆心按钮用于展开/收起顶部菜单栏
-    menuToggle.addEventListener("click", function() {
-      const topMenu = document.getElementById("topMenu");
-      topMenu.classList.toggle("hidden");
-    });
-    
-    window.addEventListener("load", function(){
-      setTimeout(function(){
-        document.getElementById("topMenu").classList.remove("hidden");
-      }, 500);
     });
   </script>
 </body>
