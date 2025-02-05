@@ -3,7 +3,6 @@ import json
 import threading
 from flask import Flask, render_template, jsonify, request, redirect, url_for, current_app, Response
 from flask_httpauth import HTTPBasicAuth
-from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_socketio import SocketIO
 from flask_admin import Admin, BaseView, expose, AdminIndexView
@@ -21,7 +20,6 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 auth = HTTPBasicAuth()
 socketio = SocketIO(app, socketio_path='/ws')
-CORS(app, origins="http://172.16.34.188:5000")
 
 # 读取配置文件，获取认证信息（确保 static/config.json 存在）
 CONFIG_FILE = os.path.join(os.path.dirname(__file__), "static/config.json")
@@ -110,6 +108,97 @@ def monitor_events():
             except Exception as e:
                 app.logger.error("读取 events.json 失败: %s", e)
         socketio.sleep(1)
+
+# 自定义 AdminIndexView，要求认证
+class MyAdminIndexView(AdminIndexView):
+    @expose('/')
+    @auth.login_required
+    def index(self):
+        return super(MyAdminIndexView, self).index()
+
+# 自定义 ModelView，要求认证
+class MyModelView(ModelView):
+    def is_accessible(self):
+        auth_data = request.authorization
+        if auth_data and auth_data.username in users and check_password_hash(users.get(auth_data.username), auth_data.password):
+            return True
+        return False
+
+    def inaccessible_callback(self, name, **kwargs):
+        return Response(
+            'Authentication required', 401,
+            {'WWW-Authenticate': 'Basic realm="Login Required"'}
+        )
+
+# 自定义支持编辑多个 JSON 文件的视图，要求认证
+class MultiJSONAdminView(BaseView):
+    @expose('/', methods=['GET', 'POST'])
+    @auth.login_required
+    def index(self):
+        static_dir = current_app.static_folder
+        json_files = []
+        for root, dirs, files in os.walk(static_dir):
+            rel_dir = os.path.relpath(root, static_dir)
+            for file in files:
+                if file.lower().endswith('.json'):
+                    rel_path = os.path.join(rel_dir, file) if rel_dir != '.' else file
+                    json_files.append(rel_path)
+        filename = request.args.get('filename', json_files[0] if json_files else None)
+        error = None
+        file_content = ""
+        if filename:
+            json_path = os.path.join(static_dir, filename)
+            if os.path.exists(json_path):
+                try:
+                    with open(json_path, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                    file_content = json.dumps(data, ensure_ascii=False, indent=4)
+                except Exception as e:
+                    error = f"读取 {filename} 失败: " + str(e)
+            else:
+                error = f"文件 {filename} 不存在。"
+        if request.method == 'POST' and filename:
+            json_text = request.form.get('json_text')
+            try:
+                data = json.loads(json_text)
+                json_path = os.path.join(static_dir, filename)
+                with open(json_path, 'w', encoding='utf-8') as f:
+                    json.dump(data, f, ensure_ascii=False, indent=4)
+                return redirect(url_for('.index', filename=filename))
+            except Exception as e:
+                error = "提交数据格式有误: " + str(e)
+                file_content = json_text
+        return self.render('admin/multi_json_edit.html',
+                           json_text=file_content,
+                           error=error,
+                           json_files=json_files,
+                           current_file=filename)
+
+    def is_accessible(self):
+        auth_data = request.authorization
+        if auth_data and auth_data.username in users and check_password_hash(users.get(auth_data.username), auth_data.password):
+            return True
+        return False
+
+    def inaccessible_callback(self, name, **kwargs):
+        return Response(
+            'Authentication required', 401,
+            {'WWW-Authenticate': 'Basic realm="Login Required"'}
+        )
+
+# 定义数据库模型
+class Event(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    date = db.Column(db.String(20))
+    description = db.Column(db.String(200))
+    def __repr__(self):
+        return f'<Event {self.date} - {self.description}>'
+
+# 初始化 Flask-Admin
+admin = Admin(app, name='后台管理', template_mode='bootstrap3', index_view=MyAdminIndexView())
+admin.add_view(MyModelView(Event, db.session))
+admin.add_view(MultiJSONAdminView(name='JSON 管理', endpoint='json_admin'))
+
 
 if __name__ == '__main__':
     # 在 Flask 应用启动时创建数据库表

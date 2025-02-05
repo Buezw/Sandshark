@@ -6,5 +6,5 @@ thumbnail_errors.txt
 electron/node_modules
 SandShark.xmind
 electron/dist
-flask_app\certs
-electron\certs
+flask_app/certs
+electron/certs
