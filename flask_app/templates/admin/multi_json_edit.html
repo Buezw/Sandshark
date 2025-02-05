@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <title>多 JSON 文件管理</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+</head>
+<body>
+<div class="container">
+    <h2>编辑 JSON 数据</h2>
+    {% if error %}
+    <div class="alert alert-danger">{{ error }}</div>
+    {% endif %}
+
+    <!-- 下拉列表选择要编辑的 JSON 文件 -->
+    <form method="get" action="{{ url_for('.index') }}" class="form-inline">
+        <div class="form-group">
+            <label for="filename">选择 JSON 文件：</label>
+            <select name="filename" id="filename" class="form-control" onchange="this.form.submit()">
+                {% for file in json_files %}
+                    <option value="{{ file }}" {% if file == current_file %}selected{% endif %}>{{ file }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </form>
+    <br>
+    <!-- 编辑区域 -->
+    <form method="post">
+        <div class="form-group">
+            <textarea name="json_text" rows="20" class="form-control" style="font-family:monospace;">{{ json_text }}</textarea>
+        </div>
+        <button type="submit" class="btn btn-primary">保存修改</button>
+    </form>
+</div>
+</body>
+</html>

@@ -2,8 +2,9 @@ const { app, BrowserWindow, BrowserView, ipcMain } = require('electron');
 const fs = require('fs');
 const path = require('path');
 
+// 全局变量：主窗口、标签页数组、当前激活标签、下一个标签 ID、书签数组
 let mainWindow;
-let tabs = [];           // 存储各个标签 { id, view, url }
+let tabs = [];           // 存储各个标签页，格式为 { id, view, url }
 let activeTabId = null;
 let nextTabId = 1;
 let bookmarks = [];
@@ -20,20 +21,28 @@ if (fs.existsSync(bookmarkFilePath)) {
   bookmarks = [];
 }
 
+/**
+ * 创建主窗口
+ */
 function createMainWindow() {
   mainWindow = new BrowserWindow({
     fullscreen: true,
     webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false
+      nodeIntegration: true,    // 启用 Node 集成（仅用于渲染进程）
+      contextIsolation: false   // 关闭上下文隔离
     }
   });
 
+  // 打开开发者工具
+  mainWindow.webContents.openDevTools();
+
+  // 去除菜单栏
   mainWindow.setMenu(null);
-  // 修改为加载 Flask 服务的 URL
+
+  // 根据实际情况修改登录 URL（若后端认证信息已由前端通过请求头传递，可以移除 URL 中的凭证）
   mainWindow.loadURL('http://Buezwqwg:F40orte%2C%2C@172.16.34.188:5000');
 
-
+  // 当窗口大小变化时，调整当前激活标签页的 BrowserView 大小
   mainWindow.on('resize', throttle(() => {
     if (activeTabId !== null) {
       const activeTab = tabs.find(tab => tab.id === activeTabId);
@@ -44,14 +53,14 @@ function createMainWindow() {
     }
   }, 100));
 
-  const eventsFilePath = path.join(__dirname, '../flask_app/static', 'events.json');
-  fs.watch(eventsFilePath, (eventType, filename) => {
-    if (filename && eventType === 'change') {
-      mainWindow.webContents.send('events-updated');
-    }
-  });
+  // 由于 events 更新通过后端 WebSocket 推送到前端，此处不再监控本地 events 文件
 }
 
+/**
+ * 节流函数：限制 func 在 delay 毫秒内仅执行一次
+ * @param {Function} func - 需要执行的函数
+ * @param {number} delay - 延迟时间（毫秒）
+ */
 function throttle(func, delay) {
   let timeout = null;
   return () => {
@@ -64,27 +73,32 @@ function throttle(func, delay) {
   };
 }
 
+/**
+ * 创建新的标签页（BrowserView）
+ * @param {string} url - 标签页加载的 URL，默认使用 bilibili 网站
+ * @returns {number} 新标签页的 id
+ */
 function createTab(url = 'https://www.bilibili.com') {
   let tabId = nextTabId++;
   let view = new BrowserView({
     webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true
+      nodeIntegration: false,  // 禁用 Node 集成
+      contextIsolation: true     // 开启上下文隔离
     }
   });
   view.webContents.loadURL(url);
-
   view.webContents.setWindowOpenHandler(({ url }) => {
     view.webContents.loadURL(url);
     return { action: 'deny' };
   });
-
-  // 删除了历史记录相关功能，此处不再记录导航历史
-
   tabs.push({ id: tabId, view, url });
   return tabId;
 }
 
+/**
+ * 设置当前激活的标签页
+ * @param {number} tabId - 要激活的标签页 id
+ */
 function setActiveTab(tabId) {
   if (activeTabId !== null) {
     const current = tabs.find(tab => tab.id === activeTabId);
@@ -99,16 +113,19 @@ function setActiveTab(tabId) {
   }
 }
 
-// IPC 接口
+/* -------------------- IPC 接口定义 -------------------- */
+
 ipcMain.handle('create-tab', (event, url) => {
   let tabId = createTab(url);
   setActiveTab(tabId);
   return tabId;
 });
+
 ipcMain.handle('switch-tab', (event, tabId) => {
   setActiveTab(tabId);
   return tabId;
 });
+
 ipcMain.handle('close-tab', (event, tabId) => {
   const index = tabs.findIndex(tab => tab.id === tabId);
   if (index !== -1) {
@@ -126,7 +143,9 @@ ipcMain.handle('close-tab', (event, tabId) => {
   }
   return tabs.map(tab => ({ id: tab.id, url: tab.url }));
 });
+
 ipcMain.handle('get-tabs', () => tabs.map(tab => ({ id: tab.id, url: tab.url })));
+
 ipcMain.handle('navigate-to', (event, tabId, url) => {
   const tab = tabs.find(t => t.id === tabId);
   if (tab) {
@@ -135,14 +154,15 @@ ipcMain.handle('navigate-to', (event, tabId, url) => {
   }
   return tabId;
 });
+
 ipcMain.handle('get-bookmarks', () => bookmarks);
+
 ipcMain.handle('add-bookmark', (event, bookmark) => {
   bookmarks.push(bookmark);
   fs.writeFileSync(bookmarkFilePath, JSON.stringify(bookmarks));
   return bookmarks;
 });
 
-// 后退与刷新接口
 ipcMain.handle('go-back', (event, tabId) => {
   const tab = tabs.find(t => t.id === tabId);
   if (tab && tab.view.webContents.canGoBack()) {
@@ -150,6 +170,7 @@ ipcMain.handle('go-back', (event, tabId) => {
   }
   return tabId;
 });
+
 ipcMain.handle('reload-tab', (event, tabId) => {
   const tab = tabs.find(t => t.id === tabId);
   if (tab) {
@@ -165,6 +186,8 @@ ipcMain.on('toggle-browser', () => {
   }
 });
 
+/* -------------------- 应用启动与窗口管理 -------------------- */
+
 app.whenReady().then(() => {
   createMainWindow();
 });
@@ -172,6 +195,7 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
+
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) createMainWindow();
 });

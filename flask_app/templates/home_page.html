@@ -28,7 +28,8 @@
       cursor: pointer; margin: 0 20px; padding: 5px 10px;
     }
     #otherContainer { position: absolute; top: 60px; left: 0; width: 100%; height: calc(100% - 60px); z-index: 3000; }
-    /* 日历容器 */
+    
+    /* 日历容器样式 */
     #calendarContainer {
       position: absolute;
       width: 700px;
@@ -43,11 +44,14 @@
       margin: 0;
       padding: 0;
     }
+    
+    /* 菜单切换按钮 */
     #menuToggle {
       position: absolute; z-index: 5000;
       background: transparent; border: none; cursor: pointer;
       border-radius: 50%; width: 80px; height: 80px; user-select: none;
     }
+    
     /* 浏览器 UI 样式 */
     #browserUI {
       display: none;
@@ -57,20 +61,20 @@
     #browserTopMenu {
       height: 60px; background: #00d1ff; display: flex; align-items: center; padding: 0 10px;
     }
-    /* 新增：后退、刷新按钮放在地址框左侧 */
+    /* 浏览器顶部菜单按钮 */
     #browserTopMenu button { margin-right: 10px; padding: 5px 10px; cursor: pointer; }
     #addressInput { flex: 1; height: 30px; font-size: 16px; padding: 0 5px; }
     #tabBar {
       height: 40px; background: #ddd; display: flex; align-items: center; overflow-x: auto; padding: 0 5px;
     }
-    /* 修改：标签采用方形背景（去掉圆角） */
+    /* 标签样式 */
     .tab {
       padding: 5px 10px; margin-right: 5px; background: #fff; border: 1px solid #ccc;
       border-radius: 0; cursor: pointer; display: flex; align-items: center;
     }
     .tab.active { background: #eee; border-bottom: 2px solid #00d1ff; }
     .tab span.close { margin-left: 5px; color: red; cursor: pointer; }
-    /* 书签容器，初始隐藏 */
+    /* 书签容器，初始为隐藏 */
     #bookmarkContainer {
       display: none;
       position: absolute;
@@ -97,7 +101,7 @@
       cursor: pointer;
     }
 
-    /* 日历样式 */
+    /* 日历表格样式 */
     .calendar-table {
       width: 100%;
       height: 100%;
@@ -162,26 +166,33 @@
       z-index: -1;
     }
   </style>
+  <!-- 引入 socket.io 客户端库 -->
+  <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
 </head>
 <body>
-  <!-- 原始 UI：主页 / 日历 -->
+  <!-- 原始 UI：主页 / 日历部分 -->
   <div id="originalUI">
+    <!-- canvas 容器，用于绘制动画 -->
     <div id="canvasContainer">
       <canvas id="aiCanvas"></canvas>
     </div>
+    <!-- 顶部菜单，初始为隐藏 -->
     <div id="topMenu" class="hidden">
       <button id="btnHome">主页</button>
       <button id="btnSchedule">日历</button>
       <button id="btnBrowser">浏览器</button>
     </div>
+    <!-- 其他容器，包含日历容器 -->
     <div id="otherContainer">
       <div id="calendarContainer"></div>
     </div>
+    <!-- 菜单切换按钮 -->
     <button id="menuToggle"></button>
   </div>
 
-  <!-- 浏览器 UI -->
+  <!-- 浏览器 UI 部分 -->
   <div id="browserUI">
+    <!-- 浏览器顶部菜单 -->
     <div id="browserTopMenu">
       <button id="newTabBtn">新标签</button>
       <button id="backBtn">后退</button>
@@ -191,6 +202,7 @@
       <button id="bookmarkToggleBtn">收藏夹</button>
       <button id="exitBrowserBtn">退出浏览器</button>
     </div>
+    <!-- 标签栏 -->
     <div id="tabBar"></div>
     <!-- 书签容器 -->
     <div id="bookmarkContainer">
@@ -200,9 +212,10 @@
   </div>
 
   <script>
+    // 引入 Electron 的 ipcRenderer 模块，用于与主进程通信
     const { ipcRenderer } = require('electron');
 
-    // 缓存 DOM 元素
+    /* 缓存常用的 DOM 元素 */
     const originalUI = document.getElementById("originalUI");
     const browserUI = document.getElementById("browserUI");
     const topMenu = document.getElementById("topMenu");
@@ -228,8 +241,8 @@
     const addBookmarkBtn = document.getElementById("addBookmarkBtn");
     const bookmarksList = document.getElementById("bookmarksList");
 
-    // 全局变量
-    let currentMode = "home"; // "home" 或 "schedule"
+    // 全局变量定义
+    let currentMode = "home"; // 模式：主页 ("home") 或 日历 ("schedule")
     let activeTabId = null;
     let nodes = [];
     const nodeCount = 80;
@@ -237,26 +250,63 @@
     let animCenterX = 0;
     let prevAnimCenterX;
     let time = 0;
-    let events = {}; // 存放 events.json 数据
+    let events = {}; // 存储 events 数据（由 loadEvents() 更新）
 
-    // 用于动画控制
+    // 动画控制变量
     let animReqId = null;
 
-    // 改为从 Flask 接口获取 events 数据
-    fetch('/api/events')
-      .then(response => response.json())
+    // 后端服务器地址（HTTP 和 Socket.IO 端点）
+    const baseUrl = 'http://172.16.34.188:5000';
+
+    // 定义统一加载 events 数据的函数，用于初始加载和 WebSocket 更新
+    function loadEvents() {
+      fetch(`${baseUrl}/api/events`, {
+        headers: {
+          // 根据需要添加认证头，如果使用 Basic Auth，则示例代码如下：
+          // 'Authorization': 'Basic ' + btoa('用户名:密码')
+        },
+        credentials: 'include'
+      })
+      .then(response => {
+        if (!response.ok) {
+          throw new Error('HTTP error ' + response.status);
+        }
+        return response.json();
+      })
       .then(data => {
+        console.log("载入 events 数据:", data);
         events = data;
         if (currentMode === "schedule") {
           generateCalendar(new Date().getFullYear(), new Date().getMonth());
         }
       })
-      .catch(err => {
-        console.error("加载 events 数据失败:", err);
-        events = {};
-      });
+      .catch(err => console.error("载入 events 数据失败:", err));
+    }
 
-    // 原始 UI —— resize 计算
+    // 页面加载时先初始化 events 数据
+    window.addEventListener("load", loadEvents);
+
+    // 使用 socket.io 客户端库建立连接（自动连接到 /socket.io 默认端点）
+    const socket = io(baseUrl);
+    socket.on('connect', () => {
+      console.log("socket.io 已连接");
+    });
+    // 当收到服务器推送的 events 更新时，统一调用 loadEvents() 重新加载数据
+    socket.on('events_updated', (data) => {
+      console.log("收到 events 推送更新：", data);
+      // 如果服务器直接推送了最新数据，也可以直接赋值：
+      // events = data;
+      // 或者调用 loadEvents() 再次通过 API 获取最新数据：
+      loadEvents();
+    });
+    socket.on('disconnect', () => {
+      console.log("socket.io 连接已断开");
+    });
+    socket.on('connect_error', (err) => {
+      console.error("socket.io 连接错误：", err);
+    });
+
+    /* 原始 UI —— 窗口大小变化时重新计算 canvas 大小和位置 */
     function resizeOriginal() {
       const w = window.innerWidth;
       const h = window.innerHeight;
@@ -289,7 +339,7 @@
     }
     window.addEventListener("resize", resizeOriginal);
 
-    // 日历生成函数
+    /* 日历生成函数，根据传入的年份和月份生成日历表格 */
     function generateCalendar(year, month) {
       const monthNames = ["January", "Febuary", "March", "April", "May", "June",
                           "July", "August", "Sepetember", "October", "November", "December"];
@@ -353,20 +403,7 @@
       calendarContainer.innerHTML = html;
     }
 
-    // 监听主进程消息，尝试刷新 events 数据（如果 Flask 后台有更新，可通过 API 再次调用）
-    ipcRenderer.on('events-updated', () => {
-      fetch('/api/events')
-        .then(response => response.json())
-        .then(data => {
-          events = data;
-          if (currentMode === "schedule") {
-            generateCalendar(new Date().getFullYear(), new Date().getMonth());
-          }
-        })
-        .catch(err => console.error("刷新 events 数据失败:", err));
-    });
-
-    // 节点及动画相关
+    /* 节点及动画部分 */
     class Node {
       constructor() {
         const angle = Math.random() * 2 * Math.PI;
@@ -541,12 +578,10 @@
       }
     }
 
-    // 初始化动画与节点
     resizeOriginal();
     initNodes();
     animateOriginal();
 
-    // 模式切换
     function switchMode(newMode) {
       currentMode = newMode;
       resizeOriginal();
@@ -558,7 +593,6 @@
     btnHome.addEventListener("click", () => { switchMode("home"); });
     btnSchedule.addEventListener("click", () => { switchMode("schedule"); });
 
-    // 打开浏览器时隐藏原 UI、暂停动画，并创建标签
     btnBrowser.addEventListener("click", () => {
       originalUI.style.display = "none";
       browserUI.style.display = "block";
@@ -573,7 +607,6 @@
     menuToggle.addEventListener("click", () => { topMenu.classList.toggle("hidden"); });
     window.addEventListener("load", () => { setTimeout(() => { topMenu.classList.remove("hidden"); }, 500); });
 
-    // 浏览器 UI 逻辑
     async function refreshTabs() {
       const tabs = await ipcRenderer.invoke('get-tabs');
       tabBar.innerHTML = '';
@@ -647,7 +680,6 @@
         refreshTabs();
       }
     });
-    // 收藏夹切换按钮：点击显示/隐藏书签容器
     bookmarkToggleBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       if (bookmarkContainer.style.display === 'none' || bookmarkContainer.style.display === '') {
@@ -666,14 +698,11 @@
         refreshBookmarks();
       }
     });
-
-    // 点击页面任意位置（除书签按钮外）自动关闭收藏夹栏
     document.addEventListener("click", function(e) {
       if (bookmarkContainer.style.display === 'block' && !e.target.closest('#bookmarkToggleBtn')) {
         bookmarkContainer.style.display = 'none';
       }
     });
-
     exitBrowserBtn.addEventListener('click', () => {
       browserUI.style.display = "none";
       originalUI.style.display = "block";
