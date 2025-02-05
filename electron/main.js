@@ -1,36 +1,55 @@
 const { app, BrowserWindow, BrowserView, ipcMain } = require('electron');
+const fs = require('fs');
+const path = require('path');
 
 let mainWindow;
-let tabs = [];           // 存储各标签 { id, view, url }
+let tabs = [];           // 存储各个标签 { id, view, url }
 let activeTabId = null;
 let nextTabId = 1;
-let bookmarks = [];      // 收藏夹数组，格式：{ title, url }
-let historyData = [];    // 历史记录数组，格式：{ tabId, url, title, time }
+let bookmarks = [];
+
+// 书签文件路径及加载
+const bookmarkFilePath = path.join(__dirname, 'bookmarks.json');
+if (fs.existsSync(bookmarkFilePath)) {
+  try {
+    bookmarks = JSON.parse(fs.readFileSync(bookmarkFilePath, 'utf8'));
+  } catch (err) {
+    bookmarks = [];
+  }
+} else {
+  bookmarks = [];
+}
 
 function createMainWindow() {
   mainWindow = new BrowserWindow({
-    fullscreen: true, // 全屏模式
+    fullscreen: true,
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false
     }
   });
-  //mainWindow.webContents.openDevTools();
-  mainWindow.setMenu(null);
-  // 请根据实际情况调整路径
-  mainWindow.loadFile('../flask_app/templates/home_page.html');
 
-  // 节流处理 resize 事件，每 100ms 调用一次
+  mainWindow.setMenu(null);
+  // 修改为加载 Flask 服务的 URL
+  mainWindow.loadURL('http://Buezwqwg:F40orte%2C%2C@172.16.34.188:5000');
+
+
   mainWindow.on('resize', throttle(() => {
     if (activeTabId !== null) {
       const activeTab = tabs.find(tab => tab.id === activeTabId);
       if (activeTab) {
         const { width, height } = mainWindow.getContentBounds();
-        // 浏览器 UI 上部预留：顶部菜单 60px + 标签栏 40px + 收藏栏 40px，共 140px
         activeTab.view.setBounds({ x: 0, y: 140, width, height: height - 140 });
       }
     }
   }, 100));
+
+  const eventsFilePath = path.join(__dirname, '../flask_app/static', 'events.json');
+  fs.watch(eventsFilePath, (eventType, filename) => {
+    if (filename && eventType === 'change') {
+      mainWindow.webContents.send('events-updated');
+    }
+  });
 }
 
 function throttle(func, delay) {
@@ -42,7 +61,7 @@ function throttle(func, delay) {
         timeout = null;
       }, delay);
     }
-  }
+  };
 }
 
 function createTab(url = 'https://www.bilibili.com') {
@@ -55,32 +74,12 @@ function createTab(url = 'https://www.bilibili.com') {
   });
   view.webContents.loadURL(url);
 
-  // 拦截 window.open，在当前标签加载新页面
   view.webContents.setWindowOpenHandler(({ url }) => {
     view.webContents.loadURL(url);
     return { action: 'deny' };
   });
 
-  // 导航后记录历史，采用 executeJavaScript 获取页面标题
-  view.webContents.on('did-navigate', (event, url) => {
-    view.webContents.executeJavaScript('document.title')
-      .then(title => {
-        historyData.push({
-          tabId,
-          url,
-          title,
-          time: new Date().toISOString()
-        });
-      })
-      .catch(() => {
-        historyData.push({
-          tabId,
-          url,
-          title: url,
-          time: new Date().toISOString()
-        });
-      });
-  });
+  // 删除了历史记录相关功能，此处不再记录导航历史
 
   tabs.push({ id: tabId, view, url });
   return tabId;
@@ -139,9 +138,26 @@ ipcMain.handle('navigate-to', (event, tabId, url) => {
 ipcMain.handle('get-bookmarks', () => bookmarks);
 ipcMain.handle('add-bookmark', (event, bookmark) => {
   bookmarks.push(bookmark);
+  fs.writeFileSync(bookmarkFilePath, JSON.stringify(bookmarks));
   return bookmarks;
 });
-ipcMain.handle('get-history', () => historyData);
+
+// 后退与刷新接口
+ipcMain.handle('go-back', (event, tabId) => {
+  const tab = tabs.find(t => t.id === tabId);
+  if (tab && tab.view.webContents.canGoBack()) {
+    tab.view.webContents.goBack();
+  }
+  return tabId;
+});
+ipcMain.handle('reload-tab', (event, tabId) => {
+  const tab = tabs.find(t => t.id === tabId);
+  if (tab) {
+    tab.view.webContents.reload();
+  }
+  return tabId;
+});
+
 ipcMain.on('toggle-browser', () => {
   if (activeTabId !== null) {
     const current = tabs.find(tab => tab.id === activeTabId);
@@ -151,7 +167,6 @@ ipcMain.on('toggle-browser', () => {
 
 app.whenReady().then(() => {
   createMainWindow();
-  // 默认启动时只显示原始 UI，不新建浏览器标签
 });
 
 app.on('window-all-closed', () => {

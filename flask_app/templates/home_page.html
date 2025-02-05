@@ -28,7 +28,7 @@
       cursor: pointer; margin: 0 20px; padding: 5px 10px;
     }
     #otherContainer { position: absolute; top: 60px; left: 0; width: 100%; height: calc(100% - 60px); z-index: 3000; }
-    /* 此处将日历宽高固定为 300px，可根据需要调整 */
+    /* 日历容器 */
     #calendarContainer {
       position: absolute;
       width: 700px;
@@ -43,14 +43,11 @@
       margin: 0;
       padding: 0;
     }
-
-
     #menuToggle {
       position: absolute; z-index: 5000;
       background: transparent; border: none; cursor: pointer;
       border-radius: 50%; width: 80px; height: 80px; user-select: none;
     }
-
     /* 浏览器 UI 样式 */
     #browserUI {
       display: none;
@@ -60,31 +57,110 @@
     #browserTopMenu {
       height: 60px; background: #00d1ff; display: flex; align-items: center; padding: 0 10px;
     }
+    /* 新增：后退、刷新按钮放在地址框左侧 */
     #browserTopMenu button { margin-right: 10px; padding: 5px 10px; cursor: pointer; }
     #addressInput { flex: 1; height: 30px; font-size: 16px; padding: 0 5px; }
     #tabBar {
       height: 40px; background: #ddd; display: flex; align-items: center; overflow-x: auto; padding: 0 5px;
     }
+    /* 修改：标签采用方形背景（去掉圆角） */
     .tab {
       padding: 5px 10px; margin-right: 5px; background: #fff; border: 1px solid #ccc;
-      border-radius: 3px; cursor: pointer; display: flex; align-items: center;
+      border-radius: 0; cursor: pointer; display: flex; align-items: center;
     }
     .tab.active { background: #eee; border-bottom: 2px solid #00d1ff; }
     .tab span.close { margin-left: 5px; color: red; cursor: pointer; }
-    #bookmarksBar {
-      height: 40px; background: #f5f5f5; display: flex; align-items: center; overflow-x: auto; padding: 0 5px;
+    /* 书签容器，初始隐藏 */
+    #bookmarkContainer {
+      display: none;
+      position: absolute;
+      top: 60px;
+      right: 10px;
+      background: #f5f5f5;
+      border: 1px solid #ccc;
+      border-radius: 3px;
+      padding: 5px;
+      z-index: 6000;
+      max-width: 300px;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+    #bookmarkContainer button {
+      margin-bottom: 5px;
     }
     .bookmark {
-      padding: 5px 10px; margin-right: 5px; background: #fff; border: 1px solid #ccc;
-      border-radius: 3px; cursor: pointer;
+      padding: 5px 10px;
+      margin-bottom: 5px;
+      background: #fff;
+      border: 1px solid #ccc;
+      border-radius: 3px;
+      cursor: pointer;
     }
-    #historyPanel {
-      position: absolute; top: 140px; right: 10px; width: 300px; max-height: 400px;
-      background: #fff; border: 1px solid #ccc; overflow-y: auto; display: none; z-index: 10000;
+
+    /* 日历样式 */
+    .calendar-table {
+      width: 100%;
+      height: 100%;
+      table-layout: fixed;
+      border-collapse: separate;
+      border-spacing: 5px;
     }
-    #historyPanel h3 { margin: 0; padding: 10px; background: #eee; border-bottom: 1px solid #ccc; }
-    #historyList { list-style: none; margin: 0; padding: 10px; }
-    #historyList li { padding: 5px 0; border-bottom: 1px solid #ddd; cursor: pointer; }
+    .calendar-table caption {
+      text-align: center;
+      font-size: 18px;
+      margin: 0;
+      padding: 2px 0;
+    }
+    .calendar-table th {
+      border: 1px solid #87CEEB;
+      padding: 5px;
+    }
+    .calendar-table td {
+      border: 1px solid #87CEEB;
+      border-radius: 4px;
+      position: relative;
+      overflow: hidden;
+      background: transparent;
+    }
+    .cell-content {
+      position: relative;
+      width: 100%;
+      height: 100%;
+    }
+    .date-number {
+      position: absolute;
+      top: 0;
+      left: 0;
+      padding: 2px;
+      font-weight: bold;
+      z-index: 1;
+    }
+    .event-list {
+      position: absolute;
+      top: 20px;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      overflow: hidden;
+      font-size: 12px;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      z-index: 1;
+    }
+    .event-list div {
+      color: #FF0;
+      line-height: 1.4;
+      margin-bottom: 2px;
+    }
+    .today-bg {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: #00008b;
+      z-index: -1;
+    }
   </style>
 </head>
 <body>
@@ -104,21 +180,22 @@
     <button id="menuToggle"></button>
   </div>
 
-  <!-- 浏览器 UI：多标签、地址栏、收藏、历史 -->
+  <!-- 浏览器 UI -->
   <div id="browserUI">
     <div id="browserTopMenu">
       <button id="newTabBtn">新标签</button>
+      <button id="backBtn">后退</button>
+      <button id="refreshBtn">刷新</button>
       <input id="addressInput" type="text" placeholder="输入网址" />
       <button id="goBtn">前往</button>
-      <button id="bookmarkBtn">添加收藏</button>
-      <button id="historyBtn">历史</button>
+      <button id="bookmarkToggleBtn">收藏夹</button>
       <button id="exitBrowserBtn">退出浏览器</button>
     </div>
     <div id="tabBar"></div>
-    <div id="bookmarksBar"></div>
-    <div id="historyPanel">
-      <h3>历史记录</h3>
-      <ul id="historyList"></ul>
+    <!-- 书签容器 -->
+    <div id="bookmarkContainer">
+      <button id="addBookmarkBtn">添加收藏</button>
+      <div id="bookmarksList"></div>
     </div>
   </div>
 
@@ -140,18 +217,19 @@
 
     // 浏览器 UI 元素
     const newTabBtn = document.getElementById("newTabBtn");
+    const backBtn = document.getElementById("backBtn");
+    const refreshBtn = document.getElementById("refreshBtn");
     const addressInput = document.getElementById("addressInput");
     const goBtn = document.getElementById("goBtn");
-    const bookmarkBtn = document.getElementById("bookmarkBtn");
-    const historyBtn = document.getElementById("historyBtn");
+    const bookmarkToggleBtn = document.getElementById("bookmarkToggleBtn");
     const exitBrowserBtn = document.getElementById("exitBrowserBtn");
     const tabBar = document.getElementById("tabBar");
-    const bookmarksBar = document.getElementById("bookmarksBar");
-    const historyPanel = document.getElementById("historyPanel");
-    const historyList = document.getElementById("historyList");
+    const bookmarkContainer = document.getElementById("bookmarkContainer");
+    const addBookmarkBtn = document.getElementById("addBookmarkBtn");
+    const bookmarksList = document.getElementById("bookmarksList");
 
     // 全局变量
-    let currentMode = "home"; // "home" 或 "schedule" 模式
+    let currentMode = "home"; // "home" 或 "schedule"
     let activeTabId = null;
     let nodes = [];
     const nodeCount = 80;
@@ -159,20 +237,22 @@
     let animCenterX = 0;
     let prevAnimCenterX;
     let time = 0;
-    let events = {}; // 用于存储 events.json 中的数据
+    let events = {}; // 存放 events.json 数据
 
-    // 读取 events.json 数据（请确保路径正确，如 /static/events.json）
-    fetch('../static/events.json')
+    // 用于动画控制
+    let animReqId = null;
+
+    // 改为从 Flask 接口获取 events 数据
+    fetch('/api/events')
       .then(response => response.json())
       .then(data => {
         events = data;
-        // 若当前处于日历模式，则重新生成日历
-        if(currentMode === "schedule"){
+        if (currentMode === "schedule") {
           generateCalendar(new Date().getFullYear(), new Date().getMonth());
         }
       })
       .catch(err => {
-        console.error("加载 events.json 失败:", err);
+        console.error("加载 events 数据失败:", err);
         events = {};
       });
 
@@ -189,15 +269,12 @@
         targetCenterX = w / 2;
         calendarContainer.style.display = "none";
       } else if (currentMode === "schedule") {
-        targetCenterX = w * 0.3;
+        targetCenterX = w * 0.25;
         calendarContainer.style.display = "block";
-        // 此处固定日历尺寸为 300px * 300px
-        calendarContainer.style.width = "700px";
-        calendarContainer.style.height = "750px";
-        calendarContainer.style.top = ((h - 800) / 2) + "px";
-        calendarContainer.style.left = (w - 700 - 100) + "px";
-
-        // 生成日历内容（会根据 events 数据显示事件）
+        calendarContainer.style.width = "900px";
+        calendarContainer.style.height = "900px";
+        calendarContainer.style.top = ((h - 950) / 2) + "px";
+        calendarContainer.style.left = (w - 900 - 100) + "px";
         generateCalendar(new Date().getFullYear(), new Date().getMonth());
       }
       if (prevAnimCenterX === undefined) {
@@ -212,69 +289,84 @@
     }
     window.addEventListener("resize", resizeOriginal);
 
-    // 日历生成函数（包含事件显示）
+    // 日历生成函数
     function generateCalendar(year, month) {
-      const monthNames = ["一月", "二月", "三月", "四月", "五月", "六月",
-                          "七月", "八月", "九月", "十月", "十一月", "十二月"];
-      // 计算第一天对应的星期（调整为周一为第一天）
+      const monthNames = ["January", "Febuary", "March", "April", "May", "June",
+                          "July", "August", "Sepetember", "October", "November", "December"];
+      const today = new Date();
+      const todayYear = today.getFullYear();
+      const todayMonth = today.getMonth() + 1;
+      const todayDate = today.getDate();
+
       const firstDay = new Date(year, month, 1).getDay();
       const offset = (firstDay + 6) % 7;
       const daysInMonth = new Date(year, month + 1, 0).getDate();
-      // 计算总单元格数与所需行数
-      const totalCells = offset + daysInMonth;
-      const rows = Math.ceil(totalCells / 7);
+      const rows = Math.ceil((offset + daysInMonth) / 7);
 
-      let html = `<table style="width:100%; height:100%; table-layout: fixed; border-collapse: collapse; margin:0; padding:0;">
-        <caption style="text-align:center; font-size:18px; margin:0; padding:2px 0;">${year}年 ${monthNames[month]}</caption>
+      let html = `<table class="calendar-table">
+        <caption>${year} ${monthNames[month]}</caption>
         <thead>
           <tr>
-            <th style="border:1px solid #87CEEB; margin:0; padding:0;">一</th>
-            <th style="border:1px solid #87CEEB; margin:0; padding:0;">二</th>
-            <th style="border:1px solid #87CEEB; margin:0; padding:0;">三</th>
-            <th style="border:1px solid #87CEEB; margin:0; padding:0;">四</th>
-            <th style="border:1px solid #87CEEB; margin:0; padding:0;">五</th>
-            <th style="border:1px solid #87CEEB; margin:0; padding:0;">六</th>
-            <th style="border:1px solid #87CEEB; margin:0; padding:0;">日</th>
+            <th>Mon</th>
+            <th>Tue</th>
+            <th>Wen</th>
+            <th>Thu</th>
+            <th>Fri</th>
+            <th>Sat</th>
+            <th>Sun</th>
           </tr>
         </thead>
         <tbody>`;
       let date = 1;
       for (let i = 0; i < rows; i++) {
-        html += `<tr style="height: calc(100% / ${rows}); margin:0; padding:0;">`;
+        html += `<tr>`;
         for (let j = 0; j < 7; j++) {
-          // 判断是否为空单元格（空白区域或超出月份天数）
           if ((i === 0 && j < offset) || date > daysInMonth) {
-            html += `<td style="border:1px solid #87CEEB; margin:0; padding:0; overflow: hidden;"></td>`;
+            html += `<td></td>`;
           } else {
             const m = (month + 1) < 10 ? "0" + (month + 1) : (month + 1);
             const d = date < 10 ? "0" + date : date;
             const fullDate = `${year}-${m}-${d}`;
-            let cellContent = `<div style="position: relative; width:100%; height:100%;">`;
-            // 日期数字固定在左上角，不受事件内容影响
-            cellContent += `<div style="position: absolute; top: 0; left: 0; padding:2px; font-weight:bold;">${date}</div>`;
-            // 事件区域，从距离顶部20px处开始，确保日期数字位置固定
-            cellContent += `<div style="position: absolute; top:20px; left:0; right:0; bottom:0; overflow: hidden; font-size:12px; white-space: nowrap; text-overflow: ellipsis;">`;
+            let todayMark = '';
+            if (year === todayYear && (month + 1) === todayMonth && date === todayDate) {
+              todayMark = `<div class="today-bg"></div>`;
+            }
+            let eventHTML = '';
             if (events[fullDate]) {
               events[fullDate].forEach(ev => {
-                cellContent += `<div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${ev}</div>`;
+                eventHTML += `<div>${ev}</div>`;
               });
             }
-            cellContent += `</div></div>`;
-            html += `<td style="border:1px solid #87CEEB; margin:0; padding:0; overflow: hidden;">${cellContent}</td>`;
+            html += `<td>
+                      <div class="cell-content">
+                        ${todayMark}
+                        <div class="date-number">${date}</div>
+                        <div class="event-list">${eventHTML}</div>
+                      </div>
+                    </td>`;
             date++;
           }
         }
-        html += "</tr>";
+        html += `</tr>`;
       }
-      html += "</tbody></table>";
+      html += `</tbody></table>`;
       calendarContainer.innerHTML = html;
     }
 
+    // 监听主进程消息，尝试刷新 events 数据（如果 Flask 后台有更新，可通过 API 再次调用）
+    ipcRenderer.on('events-updated', () => {
+      fetch('/api/events')
+        .then(response => response.json())
+        .then(data => {
+          events = data;
+          if (currentMode === "schedule") {
+            generateCalendar(new Date().getFullYear(), new Date().getMonth());
+          }
+        })
+        .catch(err => console.error("刷新 events 数据失败:", err));
+    });
 
-
-
-
-    // 节点类和初始化
+    // 节点及动画相关
     class Node {
       constructor() {
         const angle = Math.random() * 2 * Math.PI;
@@ -309,6 +401,7 @@
         ctx.shadowBlur = 0;
       }
     }
+
     function initNodes() {
       nodes = [];
       for (let i = 0; i < nodeCount; i++) {
@@ -316,7 +409,6 @@
       }
     }
 
-    // 绘制同心层
     function drawConcentricLayers() {
       const w = window.innerWidth;
       const h = window.innerHeight;
@@ -389,8 +481,8 @@
       });
     }
 
-    // 主动画循环（原始 UI）
     function animateOriginal() {
+      animReqId = requestAnimationFrame(animateOriginal);
       time += 0.01;
       const w = window.innerWidth;
       const h = window.innerHeight;
@@ -440,38 +532,48 @@
       ctx.shadowBlur = 10;
       ctx.fillText(displayStr, animCenterX, centerY + baseRadius * 1.25 + 10);
       ctx.restore();
-
-      requestAnimationFrame(animateOriginal);
     }
+
+    function stopAnimation() {
+      if (animReqId) {
+        cancelAnimationFrame(animReqId);
+        animReqId = null;
+      }
+    }
+
+    // 初始化动画与节点
     resizeOriginal();
     initNodes();
     animateOriginal();
 
-    // 原始 UI —— 模式切换（直接切换，不依赖动画事件）
+    // 模式切换
     function switchMode(newMode) {
       currentMode = newMode;
       resizeOriginal();
       initNodes();
-      // 如果切换到日历模式，重新生成日历
-      if(newMode === "schedule"){
+      if (newMode === "schedule") {
         generateCalendar(new Date().getFullYear(), new Date().getMonth());
       }
     }
     btnHome.addEventListener("click", () => { switchMode("home"); });
     btnSchedule.addEventListener("click", () => { switchMode("schedule"); });
+
+    // 打开浏览器时隐藏原 UI、暂停动画，并创建标签
     btnBrowser.addEventListener("click", () => {
       originalUI.style.display = "none";
       browserUI.style.display = "block";
+      stopAnimation();
       ipcRenderer.invoke('create-tab', 'https://www.bilibili.com').then(tabId => {
         activeTabId = tabId;
         refreshTabs();
         refreshBookmarks();
       });
     });
+
     menuToggle.addEventListener("click", () => { topMenu.classList.toggle("hidden"); });
     window.addEventListener("load", () => { setTimeout(() => { topMenu.classList.remove("hidden"); }, 500); });
 
-    // 浏览器 UI —— 标签、收藏、历史逻辑
+    // 浏览器 UI 逻辑
     async function refreshTabs() {
       const tabs = await ipcRenderer.invoke('get-tabs');
       tabBar.innerHTML = '';
@@ -485,21 +587,26 @@
             refreshTabs();
           });
         };
-        if (tab.id === activeTabId) { tabElem.classList.add('active'); }
+        if (tab.id === activeTabId) {
+          tabElem.classList.add('active');
+        }
         const closeBtn = document.createElement('span');
         closeBtn.className = 'close';
         closeBtn.textContent = '×';
         closeBtn.onclick = (e) => {
           e.stopPropagation();
-          ipcRenderer.invoke('close-tab', tab.id).then(() => { refreshTabs(); });
+          ipcRenderer.invoke('close-tab', tab.id).then(() => {
+            refreshTabs();
+          });
         };
         tabElem.appendChild(closeBtn);
         tabBar.appendChild(tabElem);
       });
     }
+
     async function refreshBookmarks() {
       const bookmarks = await ipcRenderer.invoke('get-bookmarks');
-      bookmarksBar.innerHTML = '';
+      bookmarksList.innerHTML = '';
       bookmarks.forEach(bm => {
         const bmElem = document.createElement('div');
         bmElem.className = 'bookmark';
@@ -510,24 +617,47 @@
             refreshTabs();
           });
         };
-        bookmarksBar.appendChild(bmElem);
+        bookmarksList.appendChild(bmElem);
       });
     }
+
     newTabBtn.addEventListener('click', () => {
       ipcRenderer.invoke('create-tab', 'https://www.bilibili.com').then(tabId => {
         activeTabId = tabId;
         refreshTabs();
       });
     });
+    backBtn.addEventListener('click', () => {
+      if (activeTabId) {
+        ipcRenderer.invoke('go-back', activeTabId);
+      }
+    });
+    refreshBtn.addEventListener('click', () => {
+      if (activeTabId) {
+        ipcRenderer.invoke('reload-tab', activeTabId);
+      }
+    });
     goBtn.addEventListener('click', () => {
       let url = addressInput.value.trim();
-      if (url && !/^https?:\/\//i.test(url)) { url = 'http://' + url; }
+      if (url && !/^https?:\/\//i.test(url)) {
+        url = 'http://' + url;
+      }
       if (activeTabId && url) {
         ipcRenderer.invoke('navigate-to', activeTabId, url);
         refreshTabs();
       }
     });
-    bookmarkBtn.addEventListener('click', async () => {
+    // 收藏夹切换按钮：点击显示/隐藏书签容器
+    bookmarkToggleBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (bookmarkContainer.style.display === 'none' || bookmarkContainer.style.display === '') {
+        bookmarkContainer.style.display = 'block';
+        refreshBookmarks();
+      } else {
+        bookmarkContainer.style.display = 'none';
+      }
+    });
+    addBookmarkBtn.addEventListener('click', async () => {
       const tabs = await ipcRenderer.invoke('get-tabs');
       const currentTab = tabs.find(t => t.id === activeTabId);
       if (currentTab) {
@@ -536,28 +666,18 @@
         refreshBookmarks();
       }
     });
-    historyBtn.addEventListener('click', async () => {
-      if (historyPanel.style.display === 'block') {
-        historyPanel.style.display = 'none';
-      } else {
-        const hist = await ipcRenderer.invoke('get-history');
-        historyList.innerHTML = '';
-        hist.forEach(item => {
-          const li = document.createElement('li');
-          li.textContent = `${item.title} - ${item.url}`;
-          li.onclick = () => {
-            if (activeTabId) {
-              ipcRenderer.invoke('navigate-to', activeTabId, item.url);
-            }
-          };
-          historyList.appendChild(li);
-        });
-        historyPanel.style.display = 'block';
+
+    // 点击页面任意位置（除书签按钮外）自动关闭收藏夹栏
+    document.addEventListener("click", function(e) {
+      if (bookmarkContainer.style.display === 'block' && !e.target.closest('#bookmarkToggleBtn')) {
+        bookmarkContainer.style.display = 'none';
       }
     });
+
     exitBrowserBtn.addEventListener('click', () => {
       browserUI.style.display = "none";
       originalUI.style.display = "block";
+      animateOriginal();
       ipcRenderer.send('toggle-browser');
     });
   </script>

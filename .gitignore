@@ -5,3 +5,4 @@ flask_app/__pycache__/
 thumbnail_errors.txt
 electron/node_modules
 SandShark.xmind
+electron/dist

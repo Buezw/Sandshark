@@ -53,7 +53,33 @@ def get_folders():
                 folder_data[folder] = files
     return jsonify(folder_data)
 
+# 提供 events.json 接口
+@app.route('/api/events', methods=['GET'])
+@auth.login_required
+def get_events():
+    events_path = os.path.join(app.static_folder, 'events.json')
+    if os.path.exists(events_path):
+        with open(events_path, 'r', encoding='utf-8') as f:
+            events = json.load(f)
+        return jsonify(events)
+    else:
+        return jsonify({}), 404
+
+# 新增接口：递归扫描 static 文件夹下所有文件
+@app.route('/api/static-files', methods=['GET'])
+@auth.login_required
+def get_static_files():
+    static_dir = app.static_folder
+    file_list = []
+    for root, dirs, files in os.walk(static_dir):
+        rel_dir = os.path.relpath(root, static_dir)
+        for file in files:
+            rel_path = os.path.join(rel_dir, file) if rel_dir != '.' else file
+            file_list.append(rel_path)
+    return jsonify({"files": file_list})
+
 if __name__ == '__main__':
+    # 启动缩略图生成线程
     input_dir = os.path.join(app.static_folder, 'images')
     output_dir = os.path.join(app.static_folder, 'thumbnails')
     threading.Thread(
