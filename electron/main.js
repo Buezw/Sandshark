@@ -1,7 +1,10 @@
 const { app, BrowserWindow, BrowserView, ipcMain } = require('electron');
 const fs = require('fs');
 const path = require('path');
+const https = require('https');  // 导入 https 模块
+const express = require('express');  // 引入 express 模块，用于 HTTPS 服务器
 
+app.commandLine.appendSwitch('ignore-certificate-errors');
 // 全局变量：主窗口、标签页数组、当前激活标签、下一个标签 ID、书签数组
 let mainWindow;
 let tabs = [];           // 存储各个标签页，格式为 { id, view, url }
@@ -20,6 +23,12 @@ if (fs.existsSync(bookmarkFilePath)) {
 } else {
   bookmarks = [];
 }
+
+// SSL 证书路径
+const sslOptions = {
+  key: fs.readFileSync(path.join(__dirname, 'certs/key.pem')),  // 你的私钥文件路径
+  cert: fs.readFileSync(path.join(__dirname, 'certs/cert.pem'))    // 你的证书文件路径
+};
 
 /**
  * 创建主窗口
@@ -40,7 +49,7 @@ function createMainWindow() {
   mainWindow.setMenu(null);
 
   // 根据实际情况修改登录 URL（若后端认证信息已由前端通过请求头传递，可以移除 URL 中的凭证）
-  mainWindow.loadURL('http://Buezwqwg:F40orte%2C%2C@172.16.34.188:5000');
+  mainWindow.loadURL('https://Buezwqwg:F40orte%2C%2C@172.16.34.188:5000');
 
   // 当窗口大小变化时，调整当前激活标签页的 BrowserView 大小
   mainWindow.on('resize', throttle(() => {
@@ -146,47 +155,11 @@ ipcMain.handle('close-tab', (event, tabId) => {
 
 ipcMain.handle('get-tabs', () => tabs.map(tab => ({ id: tab.id, url: tab.url })));
 
-ipcMain.handle('navigate-to', (event, tabId, url) => {
-  const tab = tabs.find(t => t.id === tabId);
-  if (tab) {
-    tab.url = url;
-    tab.view.webContents.loadURL(url);
-  }
-  return tabId;
+// 更改后端 HTTPS 配置
+const server = https.createServer(sslOptions, (req, res) => {
+  res.writeHead(200);
+  res.end();
 });
-
-ipcMain.handle('get-bookmarks', () => bookmarks);
-
-ipcMain.handle('add-bookmark', (event, bookmark) => {
-  bookmarks.push(bookmark);
-  fs.writeFileSync(bookmarkFilePath, JSON.stringify(bookmarks));
-  return bookmarks;
-});
-
-ipcMain.handle('go-back', (event, tabId) => {
-  const tab = tabs.find(t => t.id === tabId);
-  if (tab && tab.view.webContents.canGoBack()) {
-    tab.view.webContents.goBack();
-  }
-  return tabId;
-});
-
-ipcMain.handle('reload-tab', (event, tabId) => {
-  const tab = tabs.find(t => t.id === tabId);
-  if (tab) {
-    tab.view.webContents.reload();
-  }
-  return tabId;
-});
-
-ipcMain.on('toggle-browser', () => {
-  if (activeTabId !== null) {
-    const current = tabs.find(tab => tab.id === activeTabId);
-    if (current) mainWindow.removeBrowserView(current.view);
-  }
-});
-
-/* -------------------- 应用启动与窗口管理 -------------------- */
 
 app.whenReady().then(() => {
   createMainWindow();
@@ -198,4 +171,9 @@ app.on('window-all-closed', () => {
 
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) createMainWindow();
+});
+
+// 启动 HTTPS 服务器
+server.listen(5000, () => {
+  console.log('HTTPS server running on https://localhost:5000');
 });

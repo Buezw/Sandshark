@@ -32,5 +32,8 @@
     "linux": {
       "target": "AppImage"
     }
+  },
+  "dependencies": {
+    "express": "^4.21.2"
   }
 }
