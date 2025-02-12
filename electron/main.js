@@ -1,13 +1,14 @@
 const { app, BrowserWindow, BrowserView, ipcMain } = require('electron');
 const fs = require('fs');
 const path = require('path');
-const https = require('https');  // 导入 https 模块
-const express = require('express');  // 引入 express 模块，用于 HTTPS 服务器
+const https = require('https');
+const express = require('express');
 
 app.commandLine.appendSwitch('ignore-certificate-errors');
+
 // 全局变量：主窗口、标签页数组、当前激活标签、下一个标签 ID、书签数组
 let mainWindow;
-let tabs = [];           // 存储各个标签页，格式为 { id, view, url }
+let tabs = [];           // 格式：{ id, view, url }
 let activeTabId = null;
 let nextTabId = 1;
 let bookmarks = [];
@@ -24,10 +25,10 @@ if (fs.existsSync(bookmarkFilePath)) {
   bookmarks = [];
 }
 
-// SSL 证书路径
+// SSL 证书路径（请根据实际路径配置）
 const sslOptions = {
-  key: fs.readFileSync(path.join(__dirname, 'certs/key.pem')),  // 你的私钥文件路径
-  cert: fs.readFileSync(path.join(__dirname, 'certs/cert.pem'))    // 你的证书文件路径
+  key: fs.readFileSync(path.join(__dirname, 'certs/key.pem')),
+  cert: fs.readFileSync(path.join(__dirname, 'certs/cert.pem'))
 };
 
 /**
@@ -37,8 +38,8 @@ function createMainWindow() {
   mainWindow = new BrowserWindow({
     fullscreen: true,
     webPreferences: {
-      nodeIntegration: true,    // 启用 Node 集成（仅用于渲染进程）
-      contextIsolation: false   // 关闭上下文隔离
+      nodeIntegration: true,    // 渲染进程可用 Node（注意安全问题）
+      contextIsolation: false
     }
   });
 
@@ -48,7 +49,7 @@ function createMainWindow() {
   // 去除菜单栏
   mainWindow.setMenu(null);
 
-  // 根据实际情况修改登录 URL（若后端认证信息已由前端通过请求头传递，可以移除 URL 中的凭证）
+  // 加载初始 URL（登录页或主页）
   mainWindow.loadURL('https://Buezwqwg:F40orte%2C%2C@172.16.34.188:5000');
 
   // 当窗口大小变化时，调整当前激活标签页的 BrowserView 大小
@@ -61,14 +62,12 @@ function createMainWindow() {
       }
     }
   }, 100));
-
-  // 由于 events 更新通过后端 WebSocket 推送到前端，此处不再监控本地 events 文件
 }
 
 /**
  * 节流函数：限制 func 在 delay 毫秒内仅执行一次
- * @param {Function} func - 需要执行的函数
- * @param {number} delay - 延迟时间（毫秒）
+ * @param {Function} func 
+ * @param {number} delay 
  */
 function throttle(func, delay) {
   let timeout = null;
@@ -84,19 +83,20 @@ function throttle(func, delay) {
 
 /**
  * 创建新的标签页（BrowserView）
- * @param {string} url - 标签页加载的 URL，默认使用 bilibili 网站
- * @returns {number} 新标签页的 id
+ * @param {string} url 
+ * @returns {number} 新标签页 id
  */
 function createTab(url = 'https://www.bilibili.com') {
   let tabId = nextTabId++;
   let view = new BrowserView({
     webPreferences: {
-      nodeIntegration: false,  // 禁用 Node 集成
-      contextIsolation: true     // 开启上下文隔离
+      nodeIntegration: false,
+      contextIsolation: true
     }
   });
   view.webContents.loadURL(url);
   view.webContents.setWindowOpenHandler(({ url }) => {
+    // 禁止弹窗，新窗口均在当前 BrowserView 加载
     view.webContents.loadURL(url);
     return { action: 'deny' };
   });
@@ -106,12 +106,14 @@ function createTab(url = 'https://www.bilibili.com') {
 
 /**
  * 设置当前激活的标签页
- * @param {number} tabId - 要激活的标签页 id
+ * @param {number} tabId 
  */
 function setActiveTab(tabId) {
   if (activeTabId !== null) {
     const current = tabs.find(tab => tab.id === activeTabId);
-    if (current) mainWindow.removeBrowserView(current.view);
+    if (current) {
+      mainWindow.removeBrowserView(current.view);
+    }
   }
   activeTabId = tabId;
   const newActive = tabs.find(tab => tab.id === tabId);
@@ -122,19 +124,22 @@ function setActiveTab(tabId) {
   }
 }
 
-/* -------------------- IPC 接口定义 -------------------- */
+/* ------------- IPC 接口定义 ------------- */
 
+// 创建新标签页
 ipcMain.handle('create-tab', (event, url) => {
   let tabId = createTab(url);
   setActiveTab(tabId);
   return tabId;
 });
 
+// 切换标签页
 ipcMain.handle('switch-tab', (event, tabId) => {
   setActiveTab(tabId);
   return tabId;
 });
 
+// 关闭指定标签页
 ipcMain.handle('close-tab', (event, tabId) => {
   const index = tabs.findIndex(tab => tab.id === tabId);
   if (index !== -1) {
@@ -153,9 +158,28 @@ ipcMain.handle('close-tab', (event, tabId) => {
   return tabs.map(tab => ({ id: tab.id, url: tab.url }));
 });
 
-ipcMain.handle('get-tabs', () => tabs.map(tab => ({ id: tab.id, url: tab.url })));
+// 获取所有标签页信息
+ipcMain.handle('get-tabs', () => {
+  return tabs.map(tab => ({ id: tab.id, url: tab.url }));
+});
 
-// 更改后端 HTTPS 配置
+// 退出浏览器：移除并销毁所有 BrowserView，确保页面立即关闭
+ipcMain.handle('exit-browser', () => {
+  tabs.forEach(tab => {
+    try {
+      mainWindow.removeBrowserView(tab.view);
+    } catch (e) {
+      console.error(e);
+    }
+    tab.view.destroy();
+  });
+  tabs = [];
+  activeTabId = null;
+  // 通知渲染进程，执行切换回原始 UI的操作
+  mainWindow.webContents.send('browser-exited');
+});
+
+// 启动 HTTPS 服务器（用于后端接口等）
 const server = https.createServer(sslOptions, (req, res) => {
   res.writeHead(200);
   res.end();

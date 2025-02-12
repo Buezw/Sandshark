@@ -34,6 +34,9 @@ def verify_password(username, password):
     if username in users and check_password_hash(users.get(username), password):
         return username
 
+# 全局文件操作锁，保证多线程读写时安全
+file_lock = threading.Lock()
+
 # 首页和图片浏览页面（均需认证）
 @app.route('/')
 @auth.login_required
@@ -65,49 +68,118 @@ def get_folders():
                 folder_data[folder] = files
     return jsonify(folder_data)
 
+# --- 通用 JSON 辅助函数 ---
+def read_json(file_path):
+    try:
+        with file_lock:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+    except Exception as e:
+        app.logger.error("读取 %s 失败: %s", file_path, e)
+        return None
+
+def write_json(file_path, data):
+    with file_lock:
+        with open(file_path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=4)
+
 @app.route('/api/events', methods=['GET'])
 @auth.login_required
-def get_events():
-    events_path = os.path.join(app.static_folder, 'events.json')
-    if os.path.exists(events_path):
-        with open(events_path, 'r', encoding='utf-8') as f:
-            events = json.load(f)
-        return jsonify(events)
-    else:
+def api_events():
+    file_path = os.path.join(current_app.static_folder, 'events.json')
+    data = read_json(file_path)
+    if data is None:
         return jsonify({}), 404
+    return jsonify(data)
 
-@app.route('/api/static-files', methods=['GET'])
+@app.route('/api/todos', methods=['GET', 'POST'])
 @auth.login_required
-def get_static_files():
+def api_todos():
+    file_path = os.path.join(current_app.static_folder, 'todo.json')
+    if request.method == 'GET':
+        todos = read_json(file_path)
+        if not isinstance(todos, list):
+            todos = []
+        # 自动删除标记为完成的 todo（completed 为真）
+        filtered = [todo for todo in todos if not todo.get("completed")]
+        if len(filtered) != len(todos):
+            write_json(file_path, filtered)
+            todos = filtered
+        return jsonify(todos)
+    else:  # POST 请求
+        new_data = request.get_json()
+        if new_data is None:
+            return jsonify({"error": "缺少提交数据"}), 400
+        todos = read_json(file_path)
+        if not isinstance(todos, list):
+            todos = []
+        # 当提交数据中 completed 为真时，认为该 todo 已完成，进行删除操作（以 text 字段匹配）
+        if new_data.get("completed"):
+            text_to_complete = new_data.get("text")
+            new_todos = [todo for todo in todos if todo.get("text") != text_to_complete]
+            write_json(file_path, new_todos)
+            socketio.emit('todo_updated', new_todos)
+            return jsonify({"message": "已删除完成的 todo"}), 200
+        else:
+            # 添加新 todo 时默认设置 completed 为 false
+            new_data.setdefault("completed", False)
+            todos.append(new_data)
+            write_json(file_path, todos)
+            socketio.emit('todo_updated', todos)
+            return jsonify(new_data), 201
+
+
+# 后台监控函数：监控 static 下所有 .json 文件的变化
+def monitor_events():
     static_dir = app.static_folder
-    file_list = []
+    file_mtimes = {}
+    # 初始化所有 .json 文件的修改时间
     for root, dirs, files in os.walk(static_dir):
-        rel_dir = os.path.relpath(root, static_dir)
         for file in files:
             if file.lower().endswith('.json'):
-                rel_path = os.path.join(rel_dir, file) if rel_dir != '.' else file
-                file_list.append(rel_path)
-    return jsonify({"files": file_list})
-
-# 后台线程：监控 events.json 文件变化并推送更新到客户端
-def monitor_events():
-    events_path = os.path.join(app.static_folder, 'events.json')
-    last_mtime = None
+                path = os.path.join(root, file)
+                try:
+                    mtime = os.path.getmtime(path)
+                    rel_path = os.path.relpath(path, static_dir)
+                    file_mtimes[rel_path] = mtime
+                except Exception as e:
+                    app.logger.error("初始化文件 %s 失败: %s", file, e)
     while True:
-        try:
-            mtime = os.path.getmtime(events_path)
-        except Exception:
-            mtime = None
-        if mtime is not None and mtime != last_mtime:
-            last_mtime = mtime
-            try:
-                with open(events_path, 'r', encoding='utf-8') as f:
-                    events = json.load(f)
-                socketio.emit('events_updated', events)
-                app.logger.info("推送 events 更新")
-            except Exception as e:
-                app.logger.error("读取 events.json 失败: %s", e)
+        for root, dirs, files in os.walk(static_dir):
+            for file in files:
+                if file.lower().endswith('.json'):
+                    path = os.path.join(root, file)
+                    try:
+                        mtime = os.path.getmtime(path)
+                        rel_path = os.path.relpath(path, static_dir)
+                        if rel_path not in file_mtimes or file_mtimes[rel_path] != mtime:
+                            file_mtimes[rel_path] = mtime
+                            # 对于特定文件（如 events.json 或 todo.json）推送单独更新
+                            if file in ['events.json', 'todo.json']:
+                                try:
+                                    with file_lock:
+                                        with open(path, 'r', encoding='utf-8') as f:
+                                            data = json.load(f)
+                                    socketio.emit(file.split('.')[0] + '_updated', data)
+                                    app.logger.info("推送 %s 更新", file)
+                                except Exception as e:
+                                    app.logger.error("读取 %s 失败: %s", file, e)
+                            # 推送通用更新事件
+                            socketio.emit('static_updated', {'file': rel_path})
+                            app.logger.info("推送 static 文件更新: %s", rel_path)
+                    except Exception as e:
+                        app.logger.error("检查文件 %s 失败: %s", file, e)
         socketio.sleep(1)
+
+# 后台管理部分
+
+# 定义数据库模型
+class Event(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    date = db.Column(db.String(20))
+    description = db.Column(db.String(200))
+    def __repr__(self):
+        return f'<Event {self.date} - {self.description}>'
 
 # 自定义 AdminIndexView，要求认证
 class MyAdminIndexView(AdminIndexView):
@@ -150,8 +222,9 @@ class MultiJSONAdminView(BaseView):
             json_path = os.path.join(static_dir, filename)
             if os.path.exists(json_path):
                 try:
-                    with open(json_path, 'r', encoding='utf-8') as f:
-                        data = json.load(f)
+                    with file_lock:
+                        with open(json_path, 'r', encoding='utf-8') as f:
+                            data = json.load(f)
                     file_content = json.dumps(data, ensure_ascii=False, indent=4)
                 except Exception as e:
                     error = f"读取 {filename} 失败: " + str(e)
@@ -162,8 +235,20 @@ class MultiJSONAdminView(BaseView):
             try:
                 data = json.loads(json_text)
                 json_path = os.path.join(static_dir, filename)
-                with open(json_path, 'w', encoding='utf-8') as f:
-                    json.dump(data, f, ensure_ascii=False, indent=4)
+                with file_lock:
+                    with open(json_path, 'w', encoding='utf-8') as f:
+                        json.dump(data, f, ensure_ascii=False, indent=4)
+                # 触发更新通知
+                socketio.emit('static_updated', {'file': filename})
+                if filename in ['events.json', 'todo.json']:
+                    try:
+                        with file_lock:
+                            with open(json_path, 'r', encoding='utf-8') as f:
+                                data = json.load(f)
+                        socketio.emit(filename.split('.')[0] + '_updated', data)
+                        app.logger.info("推送 %s 更新", filename)
+                    except Exception as e:
+                        app.logger.error("读取 %s 失败: %s", filename, e)
                 return redirect(url_for('.index', filename=filename))
             except Exception as e:
                 error = "提交数据格式有误: " + str(e)
@@ -186,22 +271,12 @@ class MultiJSONAdminView(BaseView):
             {'WWW-Authenticate': 'Basic realm="Login Required"'}
         )
 
-# 定义数据库模型
-class Event(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    date = db.Column(db.String(20))
-    description = db.Column(db.String(200))
-    def __repr__(self):
-        return f'<Event {self.date} - {self.description}>'
-
 # 初始化 Flask-Admin
 admin = Admin(app, name='后台管理', template_mode='bootstrap3', index_view=MyAdminIndexView())
 admin.add_view(MyModelView(Event, db.session))
 admin.add_view(MultiJSONAdminView(name='JSON 管理', endpoint='json_admin'))
 
-
 if __name__ == '__main__':
-    # 在 Flask 应用启动时创建数据库表
     with app.app_context():
         db.create_all()
 
@@ -212,9 +287,10 @@ if __name__ == '__main__':
         args=(input_dir, output_dir, (300, 300), 4)
     ).start()
 
-    # 启动后台任务
+    # 启动后台任务：监控 static 下所有 .json 文件的变化
     socketio.start_background_task(target=monitor_events)
 
-    # 启动 Flask 应用，启用 HTTPS
-    ssl_context = (r'E:\OneDrive\Gits\Sandshark\flask_app\certs\cert.pem', r'E:\OneDrive\Gits\Sandshark\flask_app\certs\key.pem')
+    # 启动 Flask 应用，启用 HTTPS（请修改为你本地的证书路径）
+    ssl_context = (r'E:\OneDrive\Gits\Sandshark\flask_app\certs\cert.pem',
+                   r'E:\OneDrive\Gits\Sandshark\flask_app\certs\key.pem')
     socketio.run(app, host='0.0.0.0', port=5000, ssl_context=ssl_context)

@@ -13,7 +13,7 @@
       width: 100%;
       height: 100%;
       background: #111;
-      overflow: hidden;
+      overflow: hidden; 
     }
     #canvasContainer { position: absolute; width: 100%; height: 100%; z-index: 1000; }
     #aiCanvas { width: 100%; height: 100%; }
@@ -28,12 +28,10 @@
       cursor: pointer; margin: 0 20px; padding: 5px 10px;
     }
     #otherContainer { position: absolute; top: 60px; left: 0; width: 100%; height: calc(100% - 60px); z-index: 3000; }
-    
+
     /* 日历容器样式 */
     #calendarContainer {
       position: absolute;
-      width: 700px;
-      height: 750px;
       box-sizing: border-box;
       font-family: 'Courier New', monospace;
       background: rgba(135,206,235,0.5);
@@ -45,6 +43,88 @@
       padding: 0;
     }
     
+    /* 代办事件容器样式 */
+    #todoContainer { 
+      position: absolute;
+      box-sizing: border-box;
+      font-family: 'Courier New', monospace;
+      text-align: center;
+      background: rgba(135,206,235,0.5);
+      color: #87CEEB;
+      border: 1px solid #87CEEB;
+      border-radius: 5px;
+      overflow-y: auto;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+    }
+    #todoContainer h3 { margin: 0 0 10px 0; }
+    #todoList {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    #todoList li {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      line-height: 1.5;
+      margin-bottom: 8px;
+    }
+    /* 将代办输入区域放在底部 */
+    #todoInputContainer {
+      margin-top: auto;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    #todoInput {
+      flex: 1;
+      padding: 5px;
+      font-size: 14px;
+      border: 1px solid #87CEEB;
+      border-radius: 3px;
+      background: rgba(255,255,255,0.3);
+      color: #87CEEB;
+    }
+    #addTodoBtn {
+      padding: 5px 10px;
+      margin-left: 5px;
+      font-size: 14px;
+      border: 1px solid #87CEEB;
+      border-radius: 3px;
+      background: #00d1ff;
+      color: #fff;
+      cursor: pointer;
+    }
+    
+    /* 日历右侧当天事件视图 */
+    #dayEventsContainer {
+      position: absolute;
+      box-sizing: border-box;
+      font-family: 'Courier New', monospace;
+      background: rgba(135,206,235,0.5);
+      color: #87CEEB;
+      border: 1px solid #87CEEB;
+      border-radius: 5px;
+      overflow-y: auto;
+      padding: 10px;
+    }
+    .day-events { width: 100%; }
+    .hour-row {
+      display: flex;
+      border-bottom: 1px solid #87CEEB;
+      min-height: 30px;
+      align-items: center;
+      padding: 2px 0;
+    }
+    .hour-label {
+      width: 50px;
+      text-align: right;
+      padding-right: 10px;
+    }
+    .hour-events { flex: 1; }
+
     /* 菜单切换按钮 */
     #menuToggle {
       position: absolute; z-index: 5000;
@@ -89,9 +169,7 @@
       max-height: 300px;
       overflow-y: auto;
     }
-    #bookmarkContainer button {
-      margin-bottom: 5px;
-    }
+    #bookmarkContainer button { margin-bottom: 5px; }
     .bookmark {
       padding: 5px 10px;
       margin-bottom: 5px;
@@ -176,15 +254,28 @@
     <div id="canvasContainer">
       <canvas id="aiCanvas"></canvas>
     </div>
-    <!-- 顶部菜单，初始为隐藏 -->
+    <!-- 顶部菜单 -->
     <div id="topMenu" class="hidden">
       <button id="btnHome">主页</button>
       <button id="btnSchedule">日历</button>
       <button id="btnBrowser">浏览器</button>
     </div>
-    <!-- 其他容器，包含日历容器 -->
+    <!-- 其他容器，包含代办事件、日历容器和当天事件视图 -->
     <div id="otherContainer">
+      <div id="todoContainer">
+        <h3>To do List</h3>
+        <ul id="todoList">
+          <!-- 后台返回代办事项 -->
+        </ul>
+        <div id="todoInputContainer">
+          <input type="text" id="todoInput" placeholder="添加代办事项" />
+          <button id="addTodoBtn">添加</button>
+        </div>
+      </div>
       <div id="calendarContainer"></div>
+      <div id="dayEventsContainer">
+        <!-- 当天事件视图 -->
+      </div>
     </div>
     <!-- 菜单切换按钮 -->
     <button id="menuToggle"></button>
@@ -212,10 +303,9 @@
   </div>
 
   <script>
-    // 引入 Electron 的 ipcRenderer 模块，用于与主进程通信
     const { ipcRenderer } = require('electron');
-
-    /* 缓存常用的 DOM 元素 */
+    
+    /* 缓存常用 DOM 元素 */
     const originalUI = document.getElementById("originalUI");
     const browserUI = document.getElementById("browserUI");
     const topMenu = document.getElementById("topMenu");
@@ -227,6 +317,15 @@
     const btnSchedule = document.getElementById("btnSchedule");
     const btnBrowser = document.getElementById("btnBrowser");
     const otherContainer = document.getElementById("otherContainer");
+
+    // 代办相关元素
+    const todoContainer = document.getElementById("todoContainer");
+    const todoInput = document.getElementById("todoInput");
+    const addTodoBtn = document.getElementById("addTodoBtn");
+    const todoList = document.getElementById("todoList");
+
+    // 新增当天事件视图元素
+    const dayEventsContainer = document.getElementById("dayEventsContainer");
 
     // 浏览器 UI 元素
     const newTabBtn = document.getElementById("newTabBtn");
@@ -241,8 +340,8 @@
     const addBookmarkBtn = document.getElementById("addBookmarkBtn");
     const bookmarksList = document.getElementById("bookmarksList");
 
-    // 全局变量定义
-    let currentMode = "home"; // 模式：主页 ("home") 或 日历 ("schedule")
+    // 全局变量
+    let currentMode = "home"; // "home" 或 "schedule"
     let activeTabId = null;
     let nodes = [];
     const nodeCount = 80;
@@ -250,27 +349,20 @@
     let animCenterX = 0;
     let prevAnimCenterX;
     let time = 0;
-    let events = {}; // 存储 events 数据（由 loadEvents() 更新）
+    let events = {}; // events数据
+    let todos = [];  // todos数据
 
-    // 动画控制变量
     let animReqId = null;
-
-    // 后端服务器地址（HTTP 和 Socket.IO 端点）
     const baseUrl = 'https://172.16.34.188:5000';
 
-    // 定义统一加载 events 数据的函数，用于初始加载和 WebSocket 更新
+    // 载入 events 数据
     function loadEvents() {
       fetch(`${baseUrl}/api/events`, {
-        headers: {
-          // 根据需要添加认证头，如果使用 Basic Auth，则示例代码如下：
-          // 'Authorization': 'Basic ' + btoa('用户名:密码')
-        },
+        headers: { },
         credentials: 'include'
       })
       .then(response => {
-        if (!response.ok) {
-          throw new Error('HTTP error ' + response.status);
-        }
+        if (!response.ok) throw new Error('HTTP error ' + response.status);
         return response.json();
       })
       .then(data => {
@@ -278,59 +370,150 @@
         events = data;
         if (currentMode === "schedule") {
           generateCalendar(new Date().getFullYear(), new Date().getMonth());
+          generateDayEventsView();
         }
       })
       .catch(err => console.error("载入 events 数据失败:", err));
     }
 
-    // 页面加载时先初始化 events 数据
-    window.addEventListener("load", loadEvents);
+    // 载入 todos 数据
+    function loadTodos() {
+      fetch(`${baseUrl}/api/todos`, {
+        headers: { },
+        credentials: 'include'
+      })
+      .then(response => {
+        if (!response.ok) throw new Error("HTTP error " + response.status);
+        return response.json();
+      })
+      .then(data => {
+        console.log("载入 todos 数据:", data);
+        todos = data;
+        renderTodoList();
+      })
+      .catch(err => console.error("载入 todos 数据失败:", err));
+    }
 
-    // 使用 socket.io 客户端库建立连接（自动连接到 /socket.io 默认端点）
-    const socket = io(baseUrl);
-    socket.on('connect', () => {
-      console.log("socket.io 已连接");
-    });
-    // 当收到服务器推送的 events 更新时，统一调用 loadEvents() 重新加载数据
-    socket.on('events_updated', (data) => {
-      console.log("收到 events 推送更新：", data);
-      // 如果服务器直接推送了最新数据，也可以直接赋值：
-      // events = data;
-      // 或者调用 loadEvents() 再次通过 API 获取最新数据：
+    // 渲染 todos 列表
+    // 修改 renderTodoList 函数，为每个事件右侧添加一个 checkbox
+    function renderTodoList() {
+      todoList.innerHTML = "";
+      todos.forEach(todo => {
+        const li = document.createElement("li");
+
+        const textSpan = document.createElement("span");
+        textSpan.textContent = todo.text;
+
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        // 当 checkbox 被勾选时，立即发送删除请求
+        checkbox.addEventListener("change", function() {
+          if (this.checked) {
+            fetch(`${baseUrl}/api/todos`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              credentials: "include",
+              body: JSON.stringify({ text: todo.text, completed: true })
+            })
+            .then(response => {
+              if (!response.ok) throw new Error("删除 todo 失败, HTTP error " + response.status);
+              return response.json();
+            })
+            .then(data => {
+              console.log("删除 todo 成功:", data);
+              loadTodos();
+            })
+            .catch(err => console.error("删除 todo 失败:", err));
+          }
+        });
+
+        li.appendChild(textSpan);
+        li.appendChild(checkbox);
+        todoList.appendChild(li);
+      });
+    }
+
+    // 生成当天事件视图，竖轴为小时
+    function generateDayEventsView() {
+      const today = new Date();
+      const m = (today.getMonth() + 1) < 10 ? "0" + (today.getMonth() + 1) : (today.getMonth() + 1);
+      const d = today.getDate() < 10 ? "0" + today.getDate() : today.getDate();
+      const fullDate = `${today.getFullYear()}-${m}-${d}`;
+      const eventsForToday = events[fullDate] || [];
+      let html = '<div class="day-events">';
+      for(let hour = 0; hour < 24; hour++){
+        const hourLabel = (hour < 10 ? "0" + hour : hour) + ":00";
+        html += `<div class="hour-row">
+                   <div class="hour-label">${hourLabel}</div>
+                   <div class="hour-events">`;
+        eventsForToday.forEach(ev => {
+          // 假设事件字符串中包含时间信息，例如 "09:00 会议"
+          if(ev.indexOf(hourLabel) !== -1){
+            html += `<div class="event">${ev}</div>`;
+          }
+        });
+        html += `   </div>
+                 </div>`;
+      }
+      html += '</div>';
+      dayEventsContainer.innerHTML = html;
+    }
+
+    // 页面加载时
+    window.addEventListener("load", () => {
       loadEvents();
-    });
-    socket.on('disconnect', () => {
-      console.log("socket.io 连接已断开");
-    });
-    socket.on('connect_error', (err) => {
-      console.error("socket.io 连接错误：", err);
+      loadTodos();
     });
 
-    /* 原始 UI —— 窗口大小变化时重新计算 canvas 大小和位置 */
+    // socket 连接
+    const socket = io(baseUrl);
+    socket.on('connect', () => { console.log("socket.io 已连接"); });
+    socket.on('events_updated', (data) => { console.log("收到 events 推送更新:", data); loadEvents(); });
+    socket.on('todo_updated', (data) => { console.log("收到 todos 推送更新:", data); loadTodos(); });
+    socket.on('disconnect', () => { console.log("socket.io 连接已断开"); });
+    socket.on('connect_error', (err) => { console.error("socket.io 连接错误：", err); });
+
     function resizeOriginal() {
       const w = window.innerWidth;
       const h = window.innerHeight;
       canvas.width = w;
       canvas.height = h;
       const centerY = h / 2;
-      const baseRadius = Math.min(w, h) * 0.3;
-
       if (currentMode === "home") {
-        targetCenterX = w / 2;
+        canvas.style.display = "block";
         calendarContainer.style.display = "none";
+        todoContainer.style.display = "none";
+        dayEventsContainer.style.display = "none";
+        targetCenterX = w / 2;
       } else if (currentMode === "schedule") {
-        targetCenterX = w * 0.25;
+        canvas.style.display = "none";
         calendarContainer.style.display = "block";
-        calendarContainer.style.width = "900px";
-        calendarContainer.style.height = "900px";
-        calendarContainer.style.top = ((h - 950) / 2) + "px";
-        calendarContainer.style.left = (w - 900 - 100) + "px";
+        todoContainer.style.display = "block";
+        dayEventsContainer.style.display = "block";
+        const calendarSize = 900;
+        const todoWidth = 300;
+        const dayEventsWidth = 300;
+        const gap = 20;
+        const calendarTop = (h - calendarSize) / 2;
+        const totalWidth = todoWidth + gap + calendarSize + gap + dayEventsWidth;
+        const startLeft = (w - totalWidth) / 2;
+        todoContainer.style.width = todoWidth + "px";
+        todoContainer.style.height = calendarSize + "px";
+        todoContainer.style.top = calendarTop + "px";
+        todoContainer.style.left = startLeft + "px";
+        calendarContainer.style.width = calendarSize + "px";
+        calendarContainer.style.height = calendarSize + "px";
+        calendarContainer.style.top = calendarTop + "px";
+        calendarContainer.style.left = (startLeft + todoWidth + gap) + "px";
+        dayEventsContainer.style.width = dayEventsWidth + "px";
+        dayEventsContainer.style.height = calendarSize + "px";
+        dayEventsContainer.style.top = calendarTop + "px";
+        dayEventsContainer.style.left = (startLeft + todoWidth + gap + calendarSize + gap) + "px";
         generateCalendar(new Date().getFullYear(), new Date().getMonth());
+        generateDayEventsView();
+        targetCenterX = w / 2;
       }
-      if (prevAnimCenterX === undefined) {
-        animCenterX = targetCenterX;
-        prevAnimCenterX = animCenterX;
-      }
+      const baseRadius = Math.min(w, h) * 0.3;
       const btnRadius = baseRadius * 0.8;
       menuToggle.style.width = (btnRadius * 2) + "px";
       menuToggle.style.height = (btnRadius * 2) + "px";
@@ -339,7 +522,6 @@
     }
     window.addEventListener("resize", resizeOriginal);
 
-    /* 日历生成函数，根据传入的年份和月份生成日历表格 */
     function generateCalendar(year, month) {
       const monthNames = ["January", "Febuary", "March", "April", "May", "June",
                           "July", "August", "Sepetember", "October", "November", "December"];
@@ -347,12 +529,10 @@
       const todayYear = today.getFullYear();
       const todayMonth = today.getMonth() + 1;
       const todayDate = today.getDate();
-
       const firstDay = new Date(year, month, 1).getDay();
       const offset = (firstDay + 6) % 7;
       const daysInMonth = new Date(year, month + 1, 0).getDate();
       const rows = Math.ceil((offset + daysInMonth) / 7);
-
       let html = `<table class="calendar-table">
         <caption>${year} ${monthNames[month]}</caption>
         <thead>
@@ -383,9 +563,7 @@
             }
             let eventHTML = '';
             if (events[fullDate]) {
-              events[fullDate].forEach(ev => {
-                eventHTML += `<div>${ev}</div>`;
-              });
+              events[fullDate].forEach(ev => { eventHTML += `<div>${ev}</div>`; });
             }
             html += `<td>
                       <div class="cell-content">
@@ -403,7 +581,6 @@
       calendarContainer.innerHTML = html;
     }
 
-    /* 节点及动画部分 */
     class Node {
       constructor() {
         const angle = Math.random() * 2 * Math.PI;
@@ -438,14 +615,12 @@
         ctx.shadowBlur = 0;
       }
     }
-
     function initNodes() {
       nodes = [];
       for (let i = 0; i < nodeCount; i++) {
         nodes.push(new Node());
       }
     }
-
     function drawConcentricLayers() {
       const w = window.innerWidth;
       const h = window.innerHeight;
@@ -460,9 +635,7 @@
       layers.forEach(layer => {
         const r = baseRadius * layer.factor;
         let alpha = 0.15;
-        if (layer.type === "pulsate") {
-          alpha = 0.1 + 0.1 * Math.abs(Math.sin(time));
-        }
+        if (layer.type === "pulsate") { alpha = 0.1 + 0.1 * Math.abs(Math.sin(time)); }
         const grad = ctx.createRadialGradient(animCenterX, centerY, r * 0.1, animCenterX, centerY, r);
         grad.addColorStop(0, `rgba(0,209,255,${alpha + 0.1})`);
         grad.addColorStop(0.8, `rgba(0,105,200,${alpha})`);
@@ -502,7 +675,6 @@
           ctx.stroke();
           ctx.restore();
         }
-
         if (layer.type === "rotatingArc") {
           const arcAngle = Math.PI / 2;
           const startAngle = time;
@@ -517,7 +689,6 @@
         }
       });
     }
-
     function animateOriginal() {
       animReqId = requestAnimationFrame(animateOriginal);
       time += 0.01;
@@ -570,29 +741,34 @@
       ctx.fillText(displayStr, animCenterX, centerY + baseRadius * 1.25 + 10);
       ctx.restore();
     }
-
     function stopAnimation() {
       if (animReqId) {
         cancelAnimationFrame(animReqId);
         animReqId = null;
       }
     }
-
     resizeOriginal();
     initNodes();
     animateOriginal();
 
     function switchMode(newMode) {
       currentMode = newMode;
+      if(newMode === "schedule"){
+        stopAnimation();
+        menuToggle.style.display = "none";
+      } else if(newMode === "home"){
+        menuToggle.style.display = "block";
+        animateOriginal();
+      }
       resizeOriginal();
       initNodes();
       if (newMode === "schedule") {
         generateCalendar(new Date().getFullYear(), new Date().getMonth());
+        generateDayEventsView();
       }
     }
     btnHome.addEventListener("click", () => { switchMode("home"); });
     btnSchedule.addEventListener("click", () => { switchMode("schedule"); });
-
     btnBrowser.addEventListener("click", () => {
       originalUI.style.display = "none";
       browserUI.style.display = "block";
@@ -603,7 +779,6 @@
         refreshBookmarks();
       });
     });
-
     menuToggle.addEventListener("click", () => { topMenu.classList.toggle("hidden"); });
     window.addEventListener("load", () => { setTimeout(() => { topMenu.classList.remove("hidden"); }, 500); });
 
@@ -620,23 +795,18 @@
             refreshTabs();
           });
         };
-        if (tab.id === activeTabId) {
-          tabElem.classList.add('active');
-        }
+        if (tab.id === activeTabId) { tabElem.classList.add('active'); }
         const closeBtn = document.createElement('span');
         closeBtn.className = 'close';
         closeBtn.textContent = '×';
         closeBtn.onclick = (e) => {
           e.stopPropagation();
-          ipcRenderer.invoke('close-tab', tab.id).then(() => {
-            refreshTabs();
-          });
+          ipcRenderer.invoke('close-tab', tab.id).then(() => { refreshTabs(); });
         };
         tabElem.appendChild(closeBtn);
         tabBar.appendChild(tabElem);
       });
     }
-
     async function refreshBookmarks() {
       const bookmarks = await ipcRenderer.invoke('get-bookmarks');
       bookmarksList.innerHTML = '';
@@ -653,41 +823,25 @@
         bookmarksList.appendChild(bmElem);
       });
     }
-
     newTabBtn.addEventListener('click', () => {
       ipcRenderer.invoke('create-tab', 'https://www.bilibili.com').then(tabId => {
         activeTabId = tabId;
         refreshTabs();
       });
     });
-    backBtn.addEventListener('click', () => {
-      if (activeTabId) {
-        ipcRenderer.invoke('go-back', activeTabId);
-      }
-    });
-    refreshBtn.addEventListener('click', () => {
-      if (activeTabId) {
-        ipcRenderer.invoke('reload-tab', activeTabId);
-      }
-    });
+    backBtn.addEventListener('click', () => { if (activeTabId) { ipcRenderer.invoke('go-back', activeTabId); } });
+    refreshBtn.addEventListener('click', () => { if (activeTabId) { ipcRenderer.invoke('reload-tab', activeTabId); } });
     goBtn.addEventListener('click', () => {
       let url = addressInput.value.trim();
-      if (url && !/^https?:\/\//i.test(url)) {
-        url = 'http://' + url;
-      }
-      if (activeTabId && url) {
-        ipcRenderer.invoke('navigate-to', activeTabId, url);
-        refreshTabs();
-      }
+      if (url && !/^https?:\/\//i.test(url)) { url = 'http://' + url; }
+      if (activeTabId && url) { ipcRenderer.invoke('navigate-to', activeTabId, url); refreshTabs(); }
     });
     bookmarkToggleBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       if (bookmarkContainer.style.display === 'none' || bookmarkContainer.style.display === '') {
         bookmarkContainer.style.display = 'block';
         refreshBookmarks();
-      } else {
-        bookmarkContainer.style.display = 'none';
-      }
+      } else { bookmarkContainer.style.display = 'none'; }
     });
     addBookmarkBtn.addEventListener('click', async () => {
       const tabs = await ipcRenderer.invoke('get-tabs');
@@ -703,12 +857,70 @@
         bookmarkContainer.style.display = 'none';
       }
     });
+    // 假设 exitBrowserBtn、browserUI、originalUI、animateOriginal() 已定义
     exitBrowserBtn.addEventListener('click', () => {
+      ipcRenderer.invoke('exit-browser');
+    });
+
+    // 监听主进程返回的退出事件
+    ipcRenderer.on('browser-exited', () => {
+      // 切换回原始 UI
       browserUI.style.display = "none";
       originalUI.style.display = "block";
-      animateOriginal();
-      ipcRenderer.send('toggle-browser');
+      animateOriginal();  // 重新启用主 UI 动画（如果有）
     });
+
+    ipcMain.handle('exit-browser', () => {
+      try {
+        tabs.forEach(tab => {
+          if (tab.view) {
+            // 从主窗口中移除该 BrowserView
+            try {
+              mainWindow.removeBrowserView(tab.view);
+            } catch (e) {
+              console.error("移除 BrowserView 出错:", e);
+            }
+            // 关闭其 webContents（注意：BrowserView 本身没有 destroy 方法）
+            if (tab.view.webContents && !tab.view.webContents.isDestroyed()) {
+              tab.view.webContents.close();
+            }
+          }
+        });
+
+        // 清空 tabs 数组和激活标签 ID
+        tabs = [];
+        activeTabId = null;
+
+        // 通知渲染进程，切换回原始 UI
+        mainWindow.webContents.send('browser-exited');
+        console.log("所有浏览器页面已成功关闭。");
+      } catch (error) {
+        console.error("退出浏览器时发生错误:", error);
+      }
+    });
+
+    // 添加代办事件（通过后台POST并刷新）
+    function addTodoItem(text) {
+      if (text.trim() === "") return;
+      fetch(`${baseUrl}/api/todos`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ text: text })
+      })
+      .then(response => {
+        if (!response.ok) throw new Error("添加 todo 失败, HTTP error " + response.status);
+        return response.json();
+      })
+      .then(data => {
+        console.log("添加 todo 成功:", data);
+        loadTodos();
+        todoInput.value = "";
+      })
+      .catch(err => console.error("添加 todo 失败:", err));
+    }
+    addTodoBtn.addEventListener("click", () => { addTodoItem(todoInput.value); });
+    todoInput.addEventListener("keydown", (e) => { if (e.key === "Enter") { addTodoItem(todoInput.value); } });
   </script>
 </body>
 </html>

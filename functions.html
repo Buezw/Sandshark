@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>10x5 圆角格子</title>
+    <style>
+        .container {
+            display: grid;
+            grid-template-columns: repeat(10, 1fr);
+            gap: 10px;
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .grid-item {
+            background-color: #f0f0f0;
+            border-radius: 10px;
+            padding: 15px;
+            min-height: 100px;
+            border: 2px solid #ddd;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+
+        .grid-item:hover {
+            background-color: #e0e0e0;
+            transform: scale(1.05);
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                grid-template-columns: repeat(5, 1fr);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 生成50个格子（10列x5行） -->
+        <script>
+            for(let i = 0; i < 50; i++) {
+                document.write(`
+                    <div class="grid-item">
+                        单元格 ${Math.floor(i/10)+1}-${(i%10)+1}
+                    </div>
+                `);
+            }
+        </script>
+    </div>
+</body>
+</html>
