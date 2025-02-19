@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>综合应用：浏览器</title>
+  <style>
+    /* 浏览器 UI 样式 */
+    html, body { margin: 0; padding: 0; width: 100%; height: 100%; }
+    #browserUI {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      background: #fff; z-index: 5000; overflow: hidden;
+    }
+    #browserTopMenu {
+      height: 60px; background: #00d1ff; display: flex; align-items: center; padding: 0 10px;
+    }
+    #browserTopMenu button {
+      margin-right: 10px; padding: 5px 10px; cursor: pointer;
+    }
+    #addressInput { flex: 1; height: 30px; font-size: 16px; padding: 0 5px; }
+    #tabBar {
+      height: 40px; background: #ddd; display: flex; align-items: center; overflow-x: auto; padding: 0 5px;
+    }
+    .tab {
+      padding: 5px 10px; margin-right: 5px; background: #fff; border: 1px solid #ccc;
+      cursor: pointer; display: flex; align-items: center;
+    }
+    .tab.active { background: #eee; border-bottom: 2px solid #00d1ff; }
+    .tab span.close { margin-left: 5px; color: red; cursor: pointer; }
+    #bookmarkContainer {
+      display: none;
+      position: absolute;
+      top: 60px;
+      right: 10px;
+      background: #f5f5f5;
+      border: 1px solid #ccc;
+      border-radius: 3px;
+      padding: 5px;
+      z-index: 6000;
+      max-width: 300px;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+    #bookmarkContainer button { margin-bottom: 5px; }
+    .bookmark {
+      padding: 5px 10px;
+      margin-bottom: 5px;
+      background: #fff;
+      border: 1px solid #ccc;
+      border-radius: 3px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div id="browserUI">
+    <!-- 浏览器顶部菜单 -->
+    <div id="browserTopMenu">
+      <button id="newTabBtn">新标签</button>
+      <button id="backBtn">后退</button>
+      <button id="refreshBtn">刷新</button>
+      <input id="addressInput" type="text" placeholder="输入网址" />
+      <button id="goBtn">前往</button>
+      <button id="bookmarkToggleBtn">收藏夹</button>
+      <button id="exitBrowserBtn">退出浏览器</button>
+    </div>
+    <!-- 标签栏 -->
+    <div id="tabBar"></div>
+    <!-- 书签容器 -->
+    <div id="bookmarkContainer">
+      <button id="addBookmarkBtn">添加收藏</button>
+      <div id="bookmarksList"></div>
+    </div>
+  </div>
+  <script>
+    const { ipcRenderer } = require('electron');
+    // 缓存 DOM 元素
+    const newTabBtn = document.getElementById("newTabBtn");
+    const backBtn = document.getElementById("backBtn");
+    const refreshBtn = document.getElementById("refreshBtn");
+    const addressInput = document.getElementById("addressInput");
+    const goBtn = document.getElementById("goBtn");
+    const bookmarkToggleBtn = document.getElementById("bookmarkToggleBtn");
+    const exitBrowserBtn = document.getElementById("exitBrowserBtn");
+    const tabBar = document.getElementById("tabBar");
+    const bookmarkContainer = document.getElementById("bookmarkContainer");
+    const addBookmarkBtn = document.getElementById("addBookmarkBtn");
+    const bookmarksList = document.getElementById("bookmarksList");
+
+    let activeTabId = null;
+
+    async function refreshTabs() {
+      const tabs = await ipcRenderer.invoke('get-tabs');
+      tabBar.innerHTML = '';
+      tabs.forEach(tab => {
+        const tabElem = document.createElement('div');
+        tabElem.className = 'tab';
+        tabElem.textContent = tab.url;
+        tabElem.onclick = () => {
+          ipcRenderer.invoke('switch-tab', tab.id).then(() => {
+            activeTabId = tab.id;
+            refreshTabs();
+          });
+        };
+        if (tab.id === activeTabId) { tabElem.classList.add('active'); }
+        const closeBtn = document.createElement('span');
+        closeBtn.className = 'close';
+        closeBtn.textContent = '×';
+        closeBtn.onclick = (e) => {
+          e.stopPropagation();
+          ipcRenderer.invoke('close-tab', tab.id).then(() => { refreshTabs(); });
+        };
+        tabElem.appendChild(closeBtn);
+        tabBar.appendChild(tabElem);
+      });
+    }
+
+    async function refreshBookmarks() {
+      const bookmarks = await ipcRenderer.invoke('get-bookmarks');
+      bookmarksList.innerHTML = '';
+      bookmarks.forEach(bm => {
+        const bmElem = document.createElement('div');
+        bmElem.className = 'bookmark';
+        bmElem.textContent = bm.title || bm.url;
+        bmElem.onclick = () => {
+          ipcRenderer.invoke('create-tab', bm.url).then(tabId => {
+            activeTabId = tabId;
+            refreshTabs();
+          });
+        };
+        bookmarksList.appendChild(bmElem);
+      });
+    }
+
+    newTabBtn.addEventListener('click', () => {
+      ipcRenderer.invoke('create-tab', 'https://www.bilibili.com').then(tabId => {
+        activeTabId = tabId;
+        refreshTabs();
+      });
+    });
+    backBtn.addEventListener('click', () => {
+      if (activeTabId) { ipcRenderer.invoke('go-back', activeTabId); }
+    });
+    refreshBtn.addEventListener('click', () => {
+      if (activeTabId) { ipcRenderer.invoke('reload-tab', activeTabId); }
+    });
+    goBtn.addEventListener('click', () => {
+      let url = addressInput.value.trim();
+      if (url && !/^https?:\/\//i.test(url)) { url = 'http://' + url; }
+      if (activeTabId && url) { ipcRenderer.invoke('navigate-to', activeTabId, url); refreshTabs(); }
+    });
+    bookmarkToggleBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (bookmarkContainer.style.display === 'none' || bookmarkContainer.style.display === '') {
+        bookmarkContainer.style.display = 'block';
+        refreshBookmarks();
+      } else {
+        bookmarkContainer.style.display = 'none';
+      }
+    });
+    addBookmarkBtn.addEventListener('click', async () => {
+      const tabs = await ipcRenderer.invoke('get-tabs');
+      const currentTab = tabs.find(t => t.id === activeTabId);
+      if (currentTab) {
+        const bookmark = { title: currentTab.url, url: currentTab.url };
+        await ipcRenderer.invoke('add-bookmark', bookmark);
+        refreshBookmarks();
+      }
+    });
+    document.addEventListener("click", function(e) {
+      if (bookmarkContainer.style.display === 'block' && !e.target.closest('#bookmarkToggleBtn')) {
+        bookmarkContainer.style.display = 'none';
+      }
+    });
+    exitBrowserBtn.addEventListener('click', () => {
+      ipcRenderer.invoke('exit-browser');
+    });
+    ipcRenderer.on('browser-exited', () => {
+      window.close();
+    });
+    window.onload = function() {
+      ipcRenderer.invoke('create-tab', 'https://www.bilibili.com').then(tabId => {
+        activeTabId = tabId;
+        refreshTabs();
+      });
+    };
+
+  </script>
+</body>
+</html>

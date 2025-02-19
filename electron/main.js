@@ -2,7 +2,6 @@ const { app, BrowserWindow, BrowserView, ipcMain } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const https = require('https');
-const express = require('express');
 
 app.commandLine.appendSwitch('ignore-certificate-errors');
 
@@ -25,21 +24,21 @@ if (fs.existsSync(bookmarkFilePath)) {
   bookmarks = [];
 }
 
-// SSL 证书路径（请根据实际路径配置）
+// SSL 证书路径（如 Electron 内部也需要使用 SSL）
 const sslOptions = {
   key: fs.readFileSync(path.join(__dirname, 'certs/key.pem')),
   cert: fs.readFileSync(path.join(__dirname, 'certs/cert.pem'))
 };
 
 /**
- * 创建主窗口
+ * 创建主窗口，初始加载 Flask 的主页 URL
  */
 function createMainWindow() {
   mainWindow = new BrowserWindow({
     fullscreen: true,
     webPreferences: {
-      nodeIntegration: true,    // 渲染进程可用 Node（注意安全问题）
-      contextIsolation: false
+      nodeIntegration: true,    // 启用 Node 集成（仅用于渲染进程）
+      contextIsolation: false   // 关闭上下文隔离
     }
   });
 
@@ -49,8 +48,8 @@ function createMainWindow() {
   // 去除菜单栏
   mainWindow.setMenu(null);
 
-  // 加载初始 URL（登录页或主页）
-  mainWindow.loadURL('https://Buezwqwg:F40orte%2C%2C@172.16.34.188:5000');
+  // 加载 Flask 的主页（含认证信息，确保与 Flask 端账号密码一致）
+  mainWindow.loadURL('https://Buezwqwg:F40orte%2C%2C@100.68.21.31:5000');
 
   // 当窗口大小变化时，调整当前激活标签页的 BrowserView 大小
   mainWindow.on('resize', throttle(() => {
@@ -66,8 +65,8 @@ function createMainWindow() {
 
 /**
  * 节流函数：限制 func 在 delay 毫秒内仅执行一次
- * @param {Function} func 
- * @param {number} delay 
+ * @param {Function} func - 需要执行的函数
+ * @param {number} delay - 延迟时间（毫秒）
  */
 function throttle(func, delay) {
   let timeout = null;
@@ -83,20 +82,19 @@ function throttle(func, delay) {
 
 /**
  * 创建新的标签页（BrowserView）
- * @param {string} url 
- * @returns {number} 新标签页 id
+ * @param {string} url - 标签页加载的 URL，默认使用 bilibili 网站
+ * @returns {number} 新标签页的 id
  */
 function createTab(url = 'https://www.bilibili.com') {
   let tabId = nextTabId++;
   let view = new BrowserView({
     webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true
+      nodeIntegration: false,  // 禁用 Node 集成
+      contextIsolation: true     // 开启上下文隔离
     }
   });
   view.webContents.loadURL(url);
   view.webContents.setWindowOpenHandler(({ url }) => {
-    // 禁止弹窗，新窗口均在当前 BrowserView 加载
     view.webContents.loadURL(url);
     return { action: 'deny' };
   });
@@ -106,14 +104,12 @@ function createTab(url = 'https://www.bilibili.com') {
 
 /**
  * 设置当前激活的标签页
- * @param {number} tabId 
+ * @param {number} tabId - 要激活的标签页 id
  */
 function setActiveTab(tabId) {
   if (activeTabId !== null) {
     const current = tabs.find(tab => tab.id === activeTabId);
-    if (current) {
-      mainWindow.removeBrowserView(current.view);
-    }
+    if (current) mainWindow.removeBrowserView(current.view);
   }
   activeTabId = tabId;
   const newActive = tabs.find(tab => tab.id === tabId);
@@ -124,7 +120,7 @@ function setActiveTab(tabId) {
   }
 }
 
-/* ------------- IPC 接口定义 ------------- */
+/* -------------------- IPC 接口定义 -------------------- */
 
 // 创建新标签页
 ipcMain.handle('create-tab', (event, url) => {
@@ -159,31 +155,72 @@ ipcMain.handle('close-tab', (event, tabId) => {
 });
 
 // 获取所有标签页信息
-ipcMain.handle('get-tabs', () => {
-  return tabs.map(tab => ({ id: tab.id, url: tab.url }));
+ipcMain.handle('get-tabs', () => tabs.map(tab => ({ id: tab.id, url: tab.url })));
+
+
+// 新增 IPC 接口：打开浏览器页面（加载 Flask 返回 browser.html 页面）
+ipcMain.handle('open-browser', () => {
+  // 这里使用 /browser 路由，并附带认证信息
+  mainWindow.loadURL('https://Buezwqwg:F40orte%2C%2C@100.68.21.31:5000/browser');
 });
 
-// 退出浏览器：移除并销毁所有 BrowserView，确保页面立即关闭
 ipcMain.handle('exit-browser', () => {
-  tabs.forEach(tab => {
-    try {
-      mainWindow.removeBrowserView(tab.view);
-    } catch (e) {
-      console.error(e);
+  // 获取所有附加的 BrowserView
+  const views = mainWindow.getBrowserViews();
+  views.forEach(view => {
+    mainWindow.removeBrowserView(view);
+    if (typeof view.destroy === 'function') {
+      view.destroy();
     }
-    tab.view.destroy();
   });
+  
+  // 确保没有 BrowserView 附加在窗口上
+  mainWindow.setBrowserView(null);
+  
+  // 清空 tabs 及 activeTabId
   tabs = [];
   activeTabId = null;
-  // 通知渲染进程，执行切换回原始 UI的操作
-  mainWindow.webContents.send('browser-exited');
+  
+  // 加载指定 URL
+  mainWindow.loadURL('https://Buezwqwg:F40orte%2C%2C@172.16.34.188:5000');
 });
 
-// 启动 HTTPS 服务器（用于后端接口等）
-const server = https.createServer(sslOptions, (req, res) => {
-  res.writeHead(200);
-  res.end();
+
+// Photoview
+ipcMain.handle('open-album', () => {
+  // 进入 Photoview
+  mainWindow.loadURL('https://Buezwqwg:F40orte%2C%2C@100.68.21.31:5000/album');
 });
+
+ipcMain.handle('exit-album', () => {
+  // 加载指定 URL
+  mainWindow.loadURL('https://Buezwqwg:F40orte%2C%2C@100.68.21.31:5000');
+});
+
+// Functions
+ipcMain.handle('open-functions', () => {
+  // 进入 Photoview
+  mainWindow.loadURL('https://Buezwqwg:F40orte%2C%2C@100.68.21.31:5000/functions');
+});
+
+ipcMain.handle('exit-functions', () => {
+  // 加载指定 URL
+  mainWindow.loadURL('https://Buezwqwg:F40orte%2C%2C@100.68.21.31:5000');
+});
+
+// Trends
+ipcMain.handle('open-trends', () => {
+  // 进入 Trends
+  mainWindow.loadURL('https://Buezwqwg:F40orte%2C%2C@100.68.21.31:5000/trends');
+});
+
+ipcMain.handle('exit-trends', () => {
+  // 加载指定 URL
+  mainWindow.loadURL('https://Buezwqwg:F40orte%2C%2C@100.68.21.31:5000');
+});
+
+
+/* -------------------- 应用生命周期 -------------------- */
 
 app.whenReady().then(() => {
   createMainWindow();
@@ -197,7 +234,12 @@ app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) createMainWindow();
 });
 
-// 启动 HTTPS 服务器
+// 此处启动一个 HTTPS 服务器（仅为示例，实际 Flask 服务由 Flask 启动）
+const server = https.createServer(sslOptions, (req, res) => {
+  res.writeHead(200);
+  res.end();
+});
+
 server.listen(5000, () => {
   console.log('HTTPS server running on https://localhost:5000');
 });

@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>热搜榜</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body {
+      background: #f5f7fa;
+      font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    /* 修改 header 为 flex 布局，使标题与按钮分布在两端 */
+    .header {
+      background: #ff5722;
+      color: #fff;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px;
+      font-size: 1.5em;
+      font-weight: bold;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      position: relative;
+    }
+    .exit-button {
+      background: #fff;
+      color: #ff5722;
+      border: none;
+      padding: 8px 12px;
+      font-size: 0.9em;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .sections {
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+    .section {
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      flex: 1;
+      min-width: 300px;
+      display: flex;
+      flex-direction: column;
+    }
+    .section h2 {
+      background: #f0f0f0;
+      margin: 0;
+      padding: 10px 16px;
+      font-size: 1.2em;
+      border-bottom: 1px solid #ddd;
+    }
+    .list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      flex: 1;
+      overflow-y: auto;
+    }
+    .list li {
+      display: flex;
+      align-items: center;
+      padding: 12px 16px;
+      border-bottom: 1px solid #f0f0f0;
+      transition: background 0.3s;
+    }
+    .list li:hover {
+      background: #f9f9f9;
+    }
+    .list li:last-child {
+      border-bottom: none;
+    }
+    .rank {
+      font-size: 1.2em;
+      font-weight: bold;
+      width: 30px;
+      text-align: center;
+      color: #ff5722;
+    }
+    .topic {
+      flex: 1;
+      margin-left: 12px;
+      color: #333;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <span>热搜榜</span>
+      <button id="exitTrendsBtn" class="exit-button">退出</button>
+    </div>
+    <div class="sections">
+      <div class="section">
+        <h2>Rebang</h2>
+        <ul class="list" id="rebangList">
+          <!-- rebang 热搜项 -->
+        </ul>
+      </div>
+      <div class="section">
+        <h2>Google Trends</h2>
+        <ul class="list" id="googleList">
+          <!-- Google Trends 热搜项 -->
+        </ul>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    // 针对 Electron 与普通浏览器的适配
+    let ipcRenderer;
+    if (typeof require !== 'undefined') {
+      try {
+        ipcRenderer = require('electron').ipcRenderer;
+      } catch (e) {
+        console.error('加载 Electron 模块失败:', e);
+        ipcRenderer = {
+          invoke: (cmd) => {
+            console.log('模拟调用 ipcRenderer.invoke:', cmd);
+            return Promise.resolve();
+          }
+        };
+      }
+    } else {
+      ipcRenderer = {
+        invoke: (cmd) => {
+          console.log('模拟调用 ipcRenderer.invoke:', cmd);
+          return Promise.resolve();
+        }
+      };
+    }
+    
+    document.addEventListener('DOMContentLoaded', function() {
+      fetch('https://100.68.21.31:5000/api/trends', {credentials: 'include'})
+        .then(response => response.json())
+        .then(data => {
+          // data 格式为 { "rebang": [...], "google": [...] }
+          const rebangList = document.getElementById('rebangList');
+          const googleList = document.getElementById('googleList');
+          
+          if (data.rebang && Array.isArray(data.rebang)) {
+            data.rebang.forEach((trend, index) => {
+              const li = document.createElement('li');
+              li.innerHTML = `<span class="rank">${index + 1}</span><span class="topic">${trend}</span>`;
+              rebangList.appendChild(li);
+            });
+          } else {
+            rebangList.innerHTML = '<li>未获取到 rebang 数据</li>';
+          }
+          
+          if (data.google && Array.isArray(data.google)) {
+            data.google.forEach((trend, index) => {
+              const li = document.createElement('li');
+              li.innerHTML = `<span class="rank">${index + 1}</span><span class="topic">${trend}</span>`;
+              googleList.appendChild(li);
+            });
+          } else {
+            googleList.innerHTML = '<li>未获取到 Google Trends 数据</li>';
+          }
+        })
+        .catch(error => console.error('获取数据失败:', error));
+    });
+
+    document.getElementById('exitTrendsBtn').addEventListener('click', () => {
+      if (typeof require !== 'undefined' && typeof ipcRenderer.invoke === 'function' && window.process) {
+        ipcRenderer.invoke('exit-trends');
+      } else {
+        // 浏览器环境下直接跳转到指定页面
+        window.location.href = 'https://Buezwqwg:F40orte%2C%2C@100.68.21.31:5000';
+      }
+    });
+  </script>
+</body>
+</html>

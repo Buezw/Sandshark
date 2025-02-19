@@ -71,6 +71,8 @@
       margin-bottom: 20px;
       border-bottom: 1px solid #1976d2;
       padding-bottom: 10px;
+      flex-wrap: wrap;
+      gap: 10px;
     }
     .main-header h1 {
       font-size: 1.8em;
@@ -87,7 +89,12 @@
     .slider-container input[type="range"] {
       margin-right: 5px;
     }
-    .main-header button {
+    /* 新增按钮组 */
+    .button-group {
+      display: flex;
+      gap: 10px;
+    }
+    .button-group button {
       background: #1976d2;
       border: none;
       padding: 8px 12px;
@@ -153,7 +160,10 @@
           <input type="range" id="sizeSlider" min="300" max="600" value="300" step="10">
           <span id="sliderValue">300</span>px
         </div>
-        <button id="toggleSidebar">隐藏侧边栏</button>
+        <div class="button-group">
+          <button id="toggleSidebar">隐藏侧边栏</button>
+          <button id="exitAlbumBtn">返回主页</button>
+        </div>
       </div>
       <div class="album" id="album">
         <!-- 点击子文件夹后加载该文件夹下的缩略图 -->
@@ -167,6 +177,28 @@
   </div>
 
   <script>
+    // 针对 Electron 与普通浏览器的适配
+    let ipcRenderer;
+    if (typeof require !== 'undefined') {
+      try {
+        ipcRenderer = require('electron').ipcRenderer;
+      } catch (e) {
+        console.error('加载 Electron 模块失败:', e);
+        ipcRenderer = {
+          invoke: (cmd) => {
+            console.log('模拟调用 ipcRenderer.invoke:', cmd);
+            return Promise.resolve();
+          }
+        };
+      }
+    } else {
+      ipcRenderer = {
+        invoke: (cmd) => {
+          console.log('模拟调用 ipcRenderer.invoke:', cmd);
+          return Promise.resolve();
+        }
+      };
+    }
     // 全局加载任务标识，每次加载新文件夹时递增
     let currentLoadId = 0;
     // 存储后端返回的文件夹数据，格式为 { 文件夹名: [文件名, ...] }
@@ -193,10 +225,10 @@
 
     // 从后端 API 加载文件夹数据
     function loadFolders() {
-      fetch('/api/folders')
+      ('/api/folders')
         .then(response => response.json())
         .then(data => {
-          folderGroups = data;
+          folderGroups = data;fetch
           updateSidebar();
           document.getElementById('folderTitle').textContent = '请选择子文件夹';
           document.getElementById('album').innerHTML = '';
@@ -277,6 +309,16 @@
       sidebar.classList.toggle('hidden');
       document.getElementById('toggleSidebar').textContent =
         sidebar.classList.contains('hidden') ? '显示侧边栏' : '隐藏侧边栏';
+    });
+
+    // 返回主页按钮：调用 Electron 的 exit-photoview 接口
+    document.getElementById('exitAlbumBtn').addEventListener('click', () => {
+      if (typeof require !== 'undefined' && typeof ipcRenderer.invoke === 'function' && window.process) {
+        ipcRenderer.invoke('exit-album');
+      } else {
+        // 浏览器环境下直接跳转到相册页面
+        window.location.href = 'https://Buezwqwg:F40orte%2C%2C@100.68.21.31:5000';
+      }
     });
 
     // 刷新文件夹数据按钮

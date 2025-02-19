@@ -2,12 +2,11 @@
 <html lang="zh">
 <head>
   <meta charset="UTF-8">
-  <title>综合应用：主页 / 日历 / 浏览器</title>
+  <title>综合应用：主页 / 日历 / 相册</title>
   <style>
     /* 公共样式 */
     html, body { margin: 0; padding: 0; width: 100%; height: 100%; }
-
-    /* 原始 UI 样式（主页、日历） */
+    /* 原始 UI 样式（主页、日历、相册） */
     #originalUI {
       position: relative;
       width: 100%;
@@ -28,21 +27,6 @@
       cursor: pointer; margin: 0 20px; padding: 5px 10px;
     }
     #otherContainer { position: absolute; top: 60px; left: 0; width: 100%; height: calc(100% - 60px); z-index: 3000; }
-
-    /* 日历容器样式 */
-    #calendarContainer {
-      position: absolute;
-      box-sizing: border-box;
-      font-family: 'Courier New', monospace;
-      background: rgba(135,206,235,0.5);
-      color: #87CEEB;
-      border: 1px solid #87CEEB;
-      border-radius: 5px;
-      overflow: hidden;
-      margin: 0;
-      padding: 0;
-    }
-    
     /* 代办事件容器样式 */
     #todoContainer { 
       position: absolute;
@@ -57,6 +41,7 @@
       padding: 10px;
       display: flex;
       flex-direction: column;
+      display: none;
     }
     #todoContainer h3 { margin: 0 0 10px 0; }
     #todoList {
@@ -71,7 +56,6 @@
       line-height: 1.5;
       margin-bottom: 8px;
     }
-    /* 将代办输入区域放在底部 */
     #todoInputContainer {
       margin-top: auto;
       display: flex;
@@ -97,8 +81,20 @@
       color: #fff;
       cursor: pointer;
     }
-    
-    /* 日历右侧当天事件视图 */
+    /* 日历容器样式 */
+    #calendarContainer {
+      position: absolute;
+      box-sizing: border-box;
+      font-family: 'Courier New', monospace;
+      background: rgba(135,206,235,0.5);
+      color: #87CEEB;
+      border: 1px solid #87CEEB;
+      border-radius: 5px;
+      overflow: hidden;
+      margin: 0;
+      padding: 0;
+    }
+    /* 当天事件视图 */
     #dayEventsContainer {
       position: absolute;
       box-sizing: border-box;
@@ -110,75 +106,25 @@
       overflow-y: auto;
       padding: 10px;
     }
-    .day-events { width: 100%; }
-    .hour-row {
-      display: flex;
-      border-bottom: 1px solid #87CEEB;
-      min-height: 30px;
-      align-items: center;
-      padding: 2px 0;
+    /* 相册容器样式 */
+    #albumContainer {
+      position: absolute;
+      box-sizing: border-box;
+      font-family: 'Courier New', monospace;
+      background: rgba(135,206,235,0.5);
+      color: #87CEEB;
+      border: 1px solid #87CEEB;
+      border-radius: 5px;
+      overflow-y: auto;
+      padding: 10px;
+      display: none;
     }
-    .hour-label {
-      width: 50px;
-      text-align: right;
-      padding-right: 10px;
-    }
-    .hour-events { flex: 1; }
-
     /* 菜单切换按钮 */
     #menuToggle {
       position: absolute; z-index: 5000;
       background: transparent; border: none; cursor: pointer;
       border-radius: 50%; width: 80px; height: 80px; user-select: none;
     }
-    
-    /* 浏览器 UI 样式 */
-    #browserUI {
-      display: none;
-      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-      background: #fff; z-index: 5000; overflow: hidden;
-    }
-    #browserTopMenu {
-      height: 60px; background: #00d1ff; display: flex; align-items: center; padding: 0 10px;
-    }
-    /* 浏览器顶部菜单按钮 */
-    #browserTopMenu button { margin-right: 10px; padding: 5px 10px; cursor: pointer; }
-    #addressInput { flex: 1; height: 30px; font-size: 16px; padding: 0 5px; }
-    #tabBar {
-      height: 40px; background: #ddd; display: flex; align-items: center; overflow-x: auto; padding: 0 5px;
-    }
-    /* 标签样式 */
-    .tab {
-      padding: 5px 10px; margin-right: 5px; background: #fff; border: 1px solid #ccc;
-      border-radius: 0; cursor: pointer; display: flex; align-items: center;
-    }
-    .tab.active { background: #eee; border-bottom: 2px solid #00d1ff; }
-    .tab span.close { margin-left: 5px; color: red; cursor: pointer; }
-    /* 书签容器，初始为隐藏 */
-    #bookmarkContainer {
-      display: none;
-      position: absolute;
-      top: 60px;
-      right: 10px;
-      background: #f5f5f5;
-      border: 1px solid #ccc;
-      border-radius: 3px;
-      padding: 5px;
-      z-index: 6000;
-      max-width: 300px;
-      max-height: 300px;
-      overflow-y: auto;
-    }
-    #bookmarkContainer button { margin-bottom: 5px; }
-    .bookmark {
-      padding: 5px 10px;
-      margin-bottom: 5px;
-      background: #fff;
-      border: 1px solid #ccc;
-      border-radius: 3px;
-      cursor: pointer;
-    }
-
     /* 日历表格样式 */
     .calendar-table {
       width: 100%;
@@ -234,33 +180,29 @@
       line-height: 1.4;
       margin-bottom: 2px;
     }
-    .today-bg {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: #00008b;
-      z-index: -1;
-    }
   </style>
   <!-- 引入 socket.io 客户端库 -->
   <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+
+
 </head>
 <body>
-  <!-- 原始 UI：主页 / 日历部分 -->
+  <!-- 原始 UI：主页 / 日历 / 相册 部分 -->
   <div id="originalUI">
     <!-- canvas 容器，用于绘制动画 -->
     <div id="canvasContainer">
       <canvas id="aiCanvas"></canvas>
     </div>
-    <!-- 顶部菜单 -->
+    <!-- 顶部菜单，初始状态隐藏 -->
     <div id="topMenu" class="hidden">
-      <button id="btnHome">主页</button>
-      <button id="btnSchedule">日历</button>
-      <button id="btnBrowser">浏览器</button>
+      <button id="btnHome">Home</button>
+      <button id="btnSchedule">Schedule</button>
+      <button id="btnBrowser">Browser</button>
+      <button id="btnAlbum">Album</button>
+      <button id="btnTrend">Trend</button>
+      <button id="btnFunctions">Functions</button>
     </div>
-    <!-- 其他容器，包含代办事件、日历容器和当天事件视图 -->
+    <!-- 其他容器，包含代办事件、日历容器、当天事件视图和相册容器 -->
     <div id="otherContainer">
       <div id="todoContainer">
         <h3>To do List</h3>
@@ -276,38 +218,41 @@
       <div id="dayEventsContainer">
         <!-- 当天事件视图 -->
       </div>
+      <div id="albumContainer">
+        <!-- 相册页面内容 -->
+      </div>
     </div>
-    <!-- 菜单切换按钮 -->
+    <!-- 菜单切换按钮（圆心） -->
     <button id="menuToggle"></button>
   </div>
 
-  <!-- 浏览器 UI 部分 -->
-  <div id="browserUI">
-    <!-- 浏览器顶部菜单 -->
-    <div id="browserTopMenu">
-      <button id="newTabBtn">新标签</button>
-      <button id="backBtn">后退</button>
-      <button id="refreshBtn">刷新</button>
-      <input id="addressInput" type="text" placeholder="输入网址" />
-      <button id="goBtn">前往</button>
-      <button id="bookmarkToggleBtn">收藏夹</button>
-      <button id="exitBrowserBtn">退出浏览器</button>
-    </div>
-    <!-- 标签栏 -->
-    <div id="tabBar"></div>
-    <!-- 书签容器 -->
-    <div id="bookmarkContainer">
-      <button id="addBookmarkBtn">添加收藏</button>
-      <div id="bookmarksList"></div>
-    </div>
-  </div>
-
   <script>
-    const { ipcRenderer } = require('electron');
-    
-    /* 缓存常用 DOM 元素 */
+    // 针对 Electron 与普通浏览器的适配
+    let ipcRenderer;
+    if (typeof require !== 'undefined') {
+      try {
+        ipcRenderer = require('electron').ipcRenderer;
+      } catch (e) {
+        console.error('加载 Electron 模块失败:', e);
+        ipcRenderer = {
+          invoke: (cmd) => {
+            console.log('模拟调用 ipcRenderer.invoke:', cmd);
+            return Promise.resolve();
+          }
+        };
+      }
+    } else {
+      ipcRenderer = {
+        invoke: (cmd) => {
+          console.log('模拟调用 ipcRenderer.invoke:', cmd);
+          return Promise.resolve();
+        }
+      };
+    }
+
+  
+    // DOM 缓存
     const originalUI = document.getElementById("originalUI");
-    const browserUI = document.getElementById("browserUI");
     const topMenu = document.getElementById("topMenu");
     const canvas = document.getElementById("aiCanvas");
     const ctx = canvas.getContext("2d");
@@ -316,49 +261,35 @@
     const btnHome = document.getElementById("btnHome");
     const btnSchedule = document.getElementById("btnSchedule");
     const btnBrowser = document.getElementById("btnBrowser");
+    const btnAlbum = document.getElementById("btnAlbum");
     const otherContainer = document.getElementById("otherContainer");
-
-    // 代办相关元素
+    // 代办相关
     const todoContainer = document.getElementById("todoContainer");
     const todoInput = document.getElementById("todoInput");
     const addTodoBtn = document.getElementById("addTodoBtn");
     const todoList = document.getElementById("todoList");
-
-    // 新增当天事件视图元素
+    // 当天事件视图
     const dayEventsContainer = document.getElementById("dayEventsContainer");
-
-    // 浏览器 UI 元素
-    const newTabBtn = document.getElementById("newTabBtn");
-    const backBtn = document.getElementById("backBtn");
-    const refreshBtn = document.getElementById("refreshBtn");
-    const addressInput = document.getElementById("addressInput");
-    const goBtn = document.getElementById("goBtn");
-    const bookmarkToggleBtn = document.getElementById("bookmarkToggleBtn");
-    const exitBrowserBtn = document.getElementById("exitBrowserBtn");
-    const tabBar = document.getElementById("tabBar");
-    const bookmarkContainer = document.getElementById("bookmarkContainer");
-    const addBookmarkBtn = document.getElementById("addBookmarkBtn");
-    const bookmarksList = document.getElementById("bookmarksList");
-
+    // 相册容器
+    const albumContainer = document.getElementById("albumContainer");
+  
     // 全局变量
-    let currentMode = "home"; // "home" 或 "schedule"
-    let activeTabId = null;
-    let nodes = [];
-    const nodeCount = 80;
+    let currentMode = "home"; // "home"、"schedule"、"album"
+    let time = 0;
+    let events = {}; // events 数据
+    let todos = [];  // todos 数据
+    let animReqId = null;
     let targetCenterX = 0;
     let animCenterX = 0;
     let prevAnimCenterX;
-    let time = 0;
-    let events = {}; // events数据
-    let todos = [];  // todos数据
-
-    let animReqId = null;
-    const baseUrl = 'https://172.16.34.188:5000';
-
-    // 载入 events 数据
+    const nodeCount = 80;
+    let nodes = [];
+    let lastTime = performance.now();
+    // 所有链接改为相对链接
+  
+    // 加载 events 数据
     function loadEvents() {
-      fetch(`${baseUrl}/api/events`, {
-        headers: { },
+      fetch('https://100.68.21.31:5000/api/events', {
         credentials: 'include'
       })
       .then(response => {
@@ -375,11 +306,10 @@
       })
       .catch(err => console.error("载入 events 数据失败:", err));
     }
-
-    // 载入 todos 数据
+  
+    // 加载 todos 数据
     function loadTodos() {
-      fetch(`${baseUrl}/api/todos`, {
-        headers: { },
+      fetch('https://100.68.21.31:5000/api/todos', {
         credentials: 'include'
       })
       .then(response => {
@@ -393,23 +323,19 @@
       })
       .catch(err => console.error("载入 todos 数据失败:", err));
     }
-
-    // 渲染 todos 列表
-    // 修改 renderTodoList 函数，为每个事件右侧添加一个 checkbox
+  
+    // 渲染 todos 列表，每项右侧添加 checkbox
     function renderTodoList() {
       todoList.innerHTML = "";
       todos.forEach(todo => {
         const li = document.createElement("li");
-
         const textSpan = document.createElement("span");
         textSpan.textContent = todo.text;
-
         const checkbox = document.createElement("input");
         checkbox.type = "checkbox";
-        // 当 checkbox 被勾选时，立即发送删除请求
         checkbox.addEventListener("change", function() {
           if (this.checked) {
-            fetch(`${baseUrl}/api/todos`, {
+            fetch('https://100.68.21.31:5000/api/todos', {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               credentials: "include",
@@ -426,14 +352,13 @@
             .catch(err => console.error("删除 todo 失败:", err));
           }
         });
-
         li.appendChild(textSpan);
         li.appendChild(checkbox);
         todoList.appendChild(li);
       });
     }
-
-    // 生成当天事件视图，竖轴为小时
+  
+    // 生成当天事件视图（按小时显示）
     function generateDayEventsView() {
       const today = new Date();
       const m = (today.getMonth() + 1) < 10 ? "0" + (today.getMonth() + 1) : (today.getMonth() + 1);
@@ -447,7 +372,6 @@
                    <div class="hour-label">${hourLabel}</div>
                    <div class="hour-events">`;
         eventsForToday.forEach(ev => {
-          // 假设事件字符串中包含时间信息，例如 "09:00 会议"
           if(ev.indexOf(hourLabel) !== -1){
             html += `<div class="event">${ev}</div>`;
           }
@@ -458,70 +382,8 @@
       html += '</div>';
       dayEventsContainer.innerHTML = html;
     }
-
-    // 页面加载时
-    window.addEventListener("load", () => {
-      loadEvents();
-      loadTodos();
-    });
-
-    // socket 连接
-    const socket = io(baseUrl);
-    socket.on('connect', () => { console.log("socket.io 已连接"); });
-    socket.on('events_updated', (data) => { console.log("收到 events 推送更新:", data); loadEvents(); });
-    socket.on('todo_updated', (data) => { console.log("收到 todos 推送更新:", data); loadTodos(); });
-    socket.on('disconnect', () => { console.log("socket.io 连接已断开"); });
-    socket.on('connect_error', (err) => { console.error("socket.io 连接错误：", err); });
-
-    function resizeOriginal() {
-      const w = window.innerWidth;
-      const h = window.innerHeight;
-      canvas.width = w;
-      canvas.height = h;
-      const centerY = h / 2;
-      if (currentMode === "home") {
-        canvas.style.display = "block";
-        calendarContainer.style.display = "none";
-        todoContainer.style.display = "none";
-        dayEventsContainer.style.display = "none";
-        targetCenterX = w / 2;
-      } else if (currentMode === "schedule") {
-        canvas.style.display = "none";
-        calendarContainer.style.display = "block";
-        todoContainer.style.display = "block";
-        dayEventsContainer.style.display = "block";
-        const calendarSize = 900;
-        const todoWidth = 300;
-        const dayEventsWidth = 300;
-        const gap = 20;
-        const calendarTop = (h - calendarSize) / 2;
-        const totalWidth = todoWidth + gap + calendarSize + gap + dayEventsWidth;
-        const startLeft = (w - totalWidth) / 2;
-        todoContainer.style.width = todoWidth + "px";
-        todoContainer.style.height = calendarSize + "px";
-        todoContainer.style.top = calendarTop + "px";
-        todoContainer.style.left = startLeft + "px";
-        calendarContainer.style.width = calendarSize + "px";
-        calendarContainer.style.height = calendarSize + "px";
-        calendarContainer.style.top = calendarTop + "px";
-        calendarContainer.style.left = (startLeft + todoWidth + gap) + "px";
-        dayEventsContainer.style.width = dayEventsWidth + "px";
-        dayEventsContainer.style.height = calendarSize + "px";
-        dayEventsContainer.style.top = calendarTop + "px";
-        dayEventsContainer.style.left = (startLeft + todoWidth + gap + calendarSize + gap) + "px";
-        generateCalendar(new Date().getFullYear(), new Date().getMonth());
-        generateDayEventsView();
-        targetCenterX = w / 2;
-      }
-      const baseRadius = Math.min(w, h) * 0.3;
-      const btnRadius = baseRadius * 0.8;
-      menuToggle.style.width = (btnRadius * 2) + "px";
-      menuToggle.style.height = (btnRadius * 2) + "px";
-      menuToggle.style.left = (animCenterX - btnRadius) + "px";
-      menuToggle.style.top = (centerY - btnRadius) + "px";
-    }
-    window.addEventListener("resize", resizeOriginal);
-
+  
+    // 生成日历表格
     function generateCalendar(year, month) {
       const monthNames = ["January", "Febuary", "March", "April", "May", "June",
                           "July", "August", "Sepetember", "October", "November", "December"];
@@ -580,7 +442,73 @@
       html += `</tbody></table>`;
       calendarContainer.innerHTML = html;
     }
-
+  
+    // 调整布局和画布尺寸
+    function resizeOriginal() {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      canvas.width = w;
+      canvas.height = h;
+      const centerY = h / 2;
+      if (currentMode === "home") {
+        canvas.style.display = "block";
+        calendarContainer.style.display = "none";
+        todoContainer.style.display = "none";
+        dayEventsContainer.style.display = "none";
+        albumContainer.style.display = "none";
+        animCenterX = w / 2;
+        targetCenterX = w / 2;
+      } else if (currentMode === "schedule") {
+        canvas.style.display = "none";
+        calendarContainer.style.display = "block";
+        todoContainer.style.display = "block";
+        dayEventsContainer.style.display = "block";
+        albumContainer.style.display = "none";
+        const calendarSize = 900;
+        const todoWidth = 300;
+        const dayEventsWidth = 300;
+        const gap = 20;
+        const calendarTop = (h - calendarSize) / 2;
+        const totalWidth = todoWidth + gap + calendarSize + gap + dayEventsWidth;
+        const startLeft = (w - totalWidth) / 2;
+        todoContainer.style.width = todoWidth + "px";
+        todoContainer.style.height = calendarSize + "px";
+        todoContainer.style.top = calendarTop + "px";
+        todoContainer.style.left = startLeft + "px";
+        calendarContainer.style.width = calendarSize + "px";
+        calendarContainer.style.height = calendarSize + "px";
+        calendarContainer.style.top = calendarTop + "px";
+        calendarContainer.style.left = (startLeft + todoWidth + gap) + "px";
+        dayEventsContainer.style.width = dayEventsWidth + "px";
+        dayEventsContainer.style.height = calendarSize + "px";
+        dayEventsContainer.style.top = calendarTop + "px";
+        dayEventsContainer.style.left = (startLeft + todoWidth + gap + calendarSize + gap) + "px";
+        generateCalendar(new Date().getFullYear(), new Date().getMonth());
+        generateDayEventsView();
+        targetCenterX = w / 2;
+      } else if (currentMode === "album") {
+        canvas.style.display = "none";
+        calendarContainer.style.display = "none";
+        todoContainer.style.display = "none";
+        dayEventsContainer.style.display = "none";
+        albumContainer.style.display = "block";
+        const albumWidth = 900;
+        const albumHeight = 600;
+        albumContainer.style.width = albumWidth + "px";
+        albumContainer.style.height = albumHeight + "px";
+        albumContainer.style.top = ((h - albumHeight) / 2) + "px";
+        albumContainer.style.left = ((w - albumWidth) / 2) + "px";
+      }
+      const baseRadius = Math.min(w, h) * 0.3;
+      const btnRadius = baseRadius * 0.8;
+      menuToggle.style.width = (btnRadius * 2) + "px";
+      menuToggle.style.height = (btnRadius * 2) + "px";
+      menuToggle.style.left = (animCenterX - btnRadius) + "px";
+      menuToggle.style.top = ((h/2) - btnRadius) + "px";
+    }
+    window.addEventListener("resize", resizeOriginal);
+  
+    // 定义动画节点（使用 deltaTime 调整速度）
     class Node {
       constructor() {
         const angle = Math.random() * 2 * Math.PI;
@@ -588,21 +516,23 @@
         const r = Math.random() * baseRadius * 0.75;
         this.x = animCenterX + r * Math.cos(angle);
         this.y = (window.innerHeight / 2) + r * Math.sin(angle);
+        // 以 60fps 为基准的速度
         this.vx = (Math.random() - 0.5) * 1.5;
         this.vy = (Math.random() - 0.5) * 1.5;
         this.radius = Math.random() * 2 + 1;
       }
-      update() {
-        this.x += this.vx;
-        this.y += this.vy;
+      update(deltaTime) {
+        const factor = deltaTime * 180;
+        this.x += this.vx * factor;
+        this.y += this.vy * factor;
         const dx = this.x - animCenterX;
         const dy = this.y - (window.innerHeight / 2);
         const baseRadius = Math.min(window.innerWidth, window.innerHeight) * 0.3;
         if (Math.hypot(dx, dy) > baseRadius * 0.75) {
           this.vx *= -1;
           this.vy *= -1;
-          this.x += this.vx * 2;
-          this.y += this.vy * 2;
+          this.x += this.vx * 2 * factor;
+          this.y += this.vy * 2 * factor;
         }
       }
       draw(ctx) {
@@ -644,7 +574,7 @@
         ctx.arc(animCenterX, centerY, r, 0, Math.PI * 2);
         ctx.fillStyle = grad;
         ctx.fill();
-
+  
         ctx.beginPath();
         ctx.arc(animCenterX, centerY, r, 0, Math.PI * 2);
         ctx.strokeStyle = `rgba(0,209,255,${alpha + 0.2})`;
@@ -653,7 +583,7 @@
         ctx.shadowColor = "#00d1ff";
         ctx.stroke();
         ctx.shadowBlur = 0;
-
+  
         if (layer.type === "ripple") {
           const rippleAlpha = 0.3 * Math.abs(Math.sin(time * 2));
           ctx.beginPath();
@@ -661,7 +591,7 @@
           ctx.strokeStyle = `rgba(0,209,255,${rippleAlpha})`;
           ctx.lineWidth = 1.5;
           ctx.stroke();
-
+  
           ctx.save();
           ctx.translate(animCenterX, centerY);
           const arcAngle = Math.PI / 2;
@@ -689,14 +619,18 @@
         }
       });
     }
-    function animateOriginal() {
+    function animateOriginal(now) {
       animReqId = requestAnimationFrame(animateOriginal);
-      time += 0.01;
+      const deltaTime = (now - lastTime) / 1000;
+      lastTime = now;
+      time += deltaTime;
+  
       const w = window.innerWidth;
       const h = window.innerHeight;
       const centerY = h / 2;
       const baseRadius = Math.min(w, h) * 0.3;
-      animCenterX += (targetCenterX - animCenterX) * 0.2;
+      animCenterX = w / 2;
+      targetCenterX = animCenterX;
       if (prevAnimCenterX === undefined) {
         prevAnimCenterX = animCenterX;
       } else {
@@ -707,11 +641,12 @@
       const btnRadius = baseRadius * 0.8;
       menuToggle.style.left = (animCenterX - btnRadius) + "px";
       menuToggle.style.top = (centerY - btnRadius) + "px";
-
+  
       ctx.clearRect(0, 0, w, h);
       drawConcentricLayers();
       ctx.globalCompositeOperation = "lighter";
-      nodes.forEach(node => { node.update(); node.draw(ctx); });
+      nodes.forEach(node => { node.update(deltaTime); node.draw(ctx); });
+      
       for (let i = 0; i < nodes.length; i++) {
         for (let j = i + 1; j < nodes.length; j++) {
           const dx = nodes[i].x - nodes[j].x;
@@ -728,9 +663,9 @@
         }
       }
       ctx.globalCompositeOperation = "source-over";
-      const now = new Date();
+      const nowDate = new Date();
       const monthAbbr = ["Jan.","Feb.","Mar.","Apr.","May","Jun.","Jul.","Aug.","Sep.","Oct.","Nov.","Dec."];
-      const displayStr = `${monthAbbr[now.getMonth()]}${now.getDate()} ${now.toLocaleTimeString()}`;
+      const displayStr = `${monthAbbr[nowDate.getMonth()]}${nowDate.getDate()} ${nowDate.toLocaleTimeString()}`;
       ctx.save();
       ctx.font = "48px 'Courier New', monospace";
       ctx.textAlign = "center";
@@ -747,164 +682,69 @@
         animReqId = null;
       }
     }
-    resizeOriginal();
-    initNodes();
-    animateOriginal();
-
+    // 模式切换
     function switchMode(newMode) {
       currentMode = newMode;
-      if(newMode === "schedule"){
+      if(newMode === "schedule" || newMode === "album"){
         stopAnimation();
         menuToggle.style.display = "none";
       } else if(newMode === "home"){
         menuToggle.style.display = "block";
-        animateOriginal();
       }
       resizeOriginal();
+      animCenterX = window.innerWidth / 2;
+      prevAnimCenterX = animCenterX;
       initNodes();
       if (newMode === "schedule") {
         generateCalendar(new Date().getFullYear(), new Date().getMonth());
         generateDayEventsView();
       }
+      if(newMode === "home"){
+        if(!animReqId){
+          lastTime = performance.now();
+          requestAnimationFrame(animateOriginal);
+        }
+      }
     }
     btnHome.addEventListener("click", () => { switchMode("home"); });
     btnSchedule.addEventListener("click", () => { switchMode("schedule"); });
     btnBrowser.addEventListener("click", () => {
-      originalUI.style.display = "none";
-      browserUI.style.display = "block";
-      stopAnimation();
-      ipcRenderer.invoke('create-tab', 'https://www.bilibili.com').then(tabId => {
-        activeTabId = tabId;
-        refreshTabs();
-        refreshBookmarks();
-      });
+      ipcRenderer.invoke('open-browser');
     });
+    
+    btnAlbum.addEventListener("click", () => {
+      if (typeof require !== 'undefined' && typeof ipcRenderer.invoke === 'function' && window.process) {
+        ipcRenderer.invoke('open-album');
+      } else {
+        window.location.href = 'https://100.68.21.31:5000/album';
+      }
+    });
+  
+    btnTrend.addEventListener("click", () => {
+      if (typeof require !== 'undefined' && typeof ipcRenderer.invoke === 'function' && window.process) {
+        ipcRenderer.invoke('open-trends');
+      } else {
+        window.location.href = 'https://100.68.21.31:5000/trends';
+      }
+    });
+    
+    btnFunctions.addEventListener("click", () => {
+      if (typeof require !== 'undefined' && typeof ipcRenderer.invoke === 'function' && window.process) {
+        ipcRenderer.invoke('open-functions');
+      } else {
+        window.location.href = 'https://100.68.21.31:5000/functions;';
+      }
+    });
+  
+    // 点击圆心按钮时切换菜单显示状态
     menuToggle.addEventListener("click", () => { topMenu.classList.toggle("hidden"); });
-    window.addEventListener("load", () => { setTimeout(() => { topMenu.classList.remove("hidden"); }, 500); });
-
-    async function refreshTabs() {
-      const tabs = await ipcRenderer.invoke('get-tabs');
-      tabBar.innerHTML = '';
-      tabs.forEach(tab => {
-        const tabElem = document.createElement('div');
-        tabElem.className = 'tab';
-        tabElem.textContent = tab.url;
-        tabElem.onclick = () => {
-          ipcRenderer.invoke('switch-tab', tab.id).then(() => {
-            activeTabId = tab.id;
-            refreshTabs();
-          });
-        };
-        if (tab.id === activeTabId) { tabElem.classList.add('active'); }
-        const closeBtn = document.createElement('span');
-        closeBtn.className = 'close';
-        closeBtn.textContent = '×';
-        closeBtn.onclick = (e) => {
-          e.stopPropagation();
-          ipcRenderer.invoke('close-tab', tab.id).then(() => { refreshTabs(); });
-        };
-        tabElem.appendChild(closeBtn);
-        tabBar.appendChild(tabElem);
-      });
-    }
-    async function refreshBookmarks() {
-      const bookmarks = await ipcRenderer.invoke('get-bookmarks');
-      bookmarksList.innerHTML = '';
-      bookmarks.forEach(bm => {
-        const bmElem = document.createElement('div');
-        bmElem.className = 'bookmark';
-        bmElem.textContent = bm.title || bm.url;
-        bmElem.onclick = () => {
-          ipcRenderer.invoke('create-tab', bm.url).then(tabId => {
-            activeTabId = tabId;
-            refreshTabs();
-          });
-        };
-        bookmarksList.appendChild(bmElem);
-      });
-    }
-    newTabBtn.addEventListener('click', () => {
-      ipcRenderer.invoke('create-tab', 'https://www.bilibili.com').then(tabId => {
-        activeTabId = tabId;
-        refreshTabs();
-      });
-    });
-    backBtn.addEventListener('click', () => { if (activeTabId) { ipcRenderer.invoke('go-back', activeTabId); } });
-    refreshBtn.addEventListener('click', () => { if (activeTabId) { ipcRenderer.invoke('reload-tab', activeTabId); } });
-    goBtn.addEventListener('click', () => {
-      let url = addressInput.value.trim();
-      if (url && !/^https?:\/\//i.test(url)) { url = 'http://' + url; }
-      if (activeTabId && url) { ipcRenderer.invoke('navigate-to', activeTabId, url); refreshTabs(); }
-    });
-    bookmarkToggleBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      if (bookmarkContainer.style.display === 'none' || bookmarkContainer.style.display === '') {
-        bookmarkContainer.style.display = 'block';
-        refreshBookmarks();
-      } else { bookmarkContainer.style.display = 'none'; }
-    });
-    addBookmarkBtn.addEventListener('click', async () => {
-      const tabs = await ipcRenderer.invoke('get-tabs');
-      const currentTab = tabs.find(t => t.id === activeTabId);
-      if (currentTab) {
-        const bookmark = { title: currentTab.url, url: currentTab.url };
-        await ipcRenderer.invoke('add-bookmark', bookmark);
-        refreshBookmarks();
-      }
-    });
-    document.addEventListener("click", function(e) {
-      if (bookmarkContainer.style.display === 'block' && !e.target.closest('#bookmarkToggleBtn')) {
-        bookmarkContainer.style.display = 'none';
-      }
-    });
-    // 假设 exitBrowserBtn、browserUI、originalUI、animateOriginal() 已定义
-    exitBrowserBtn.addEventListener('click', () => {
-      ipcRenderer.invoke('exit-browser');
-    });
-
-    // 监听主进程返回的退出事件
-    ipcRenderer.on('browser-exited', () => {
-      // 切换回原始 UI
-      browserUI.style.display = "none";
-      originalUI.style.display = "block";
-      animateOriginal();  // 重新启用主 UI 动画（如果有）
-    });
-
-    ipcMain.handle('exit-browser', () => {
-      try {
-        tabs.forEach(tab => {
-          if (tab.view) {
-            // 从主窗口中移除该 BrowserView
-            try {
-              mainWindow.removeBrowserView(tab.view);
-            } catch (e) {
-              console.error("移除 BrowserView 出错:", e);
-            }
-            // 关闭其 webContents（注意：BrowserView 本身没有 destroy 方法）
-            if (tab.view.webContents && !tab.view.webContents.isDestroyed()) {
-              tab.view.webContents.close();
-            }
-          }
-        });
-
-        // 清空 tabs 数组和激活标签 ID
-        tabs = [];
-        activeTabId = null;
-
-        // 通知渲染进程，切换回原始 UI
-        mainWindow.webContents.send('browser-exited');
-        console.log("所有浏览器页面已成功关闭。");
-      } catch (error) {
-        console.error("退出浏览器时发生错误:", error);
-      }
-    });
-
-    // 添加代办事件（通过后台POST并刷新）
+  
+    // 添加代办事件
     function addTodoItem(text) {
       if (text.trim() === "") return;
-      fetch(`${baseUrl}/api/todos`, {
+      fetch('https://100.68.21.31:5000/api/todos', {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json",'Authorization': 'Basic ' + btoa('用户名:密码') },
         credentials: "include",
         body: JSON.stringify({ text: text })
       })
@@ -921,6 +761,19 @@
     }
     addTodoBtn.addEventListener("click", () => { addTodoItem(todoInput.value); });
     todoInput.addEventListener("keydown", (e) => { if (e.key === "Enter") { addTodoItem(todoInput.value); } });
+  
+    // 页面加载完成后初始化节点和启动动画
+    window.addEventListener("load", () => {
+      resizeOriginal();
+      loadEvents();
+      loadTodos();
+      animCenterX = window.innerWidth / 2;
+      prevAnimCenterX = animCenterX;
+      initNodes();
+      lastTime = performance.now();
+      requestAnimationFrame(animateOriginal);
+    });
   </script>
+  
 </body>
 </html>

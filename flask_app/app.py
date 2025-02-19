@@ -8,10 +8,15 @@ from flask_socketio import SocketIO
 from flask_admin import Admin, BaseView, expose, AdminIndexView
 from flask_admin.contrib.sqla import ModelView
 from flask_sqlalchemy import SQLAlchemy
+from flask_cors import CORS
 from thumbnail_generator import generate_thumbnails_async  # 请确保该模块存在
 
-# 创建 Flask 应用实例
+# 创建 Flask 应用实例，并配置 CORS（支持凭证传递，只允许来自指定域名的请求）
 app = Flask(__name__)
+CORS(app,
+     supports_credentials=True,
+     resources={r"/api/*": {"origins": "https://100.68.21.31:5000"}})
+
 app.config['SECRET_KEY'] = 'your-secret-key'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///mydatabase.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -37,16 +42,31 @@ def verify_password(username, password):
 # 全局文件操作锁，保证多线程读写时安全
 file_lock = threading.Lock()
 
-# 首页和图片浏览页面（均需认证）
+# 首页
 @app.route('/')
 @auth.login_required
 def index():
     return render_template('home_page.html')
 
-@app.route('/photoview')
+@app.route('/album')
 @auth.login_required
-def photoview():
-    return render_template('photoview.html')
+def album():
+    return render_template('album.html')
+
+@app.route('/browser')
+@auth.login_required
+def browser():
+    return render_template('browser.html')
+
+@app.route('/functions')
+@auth.login_required
+def functions():
+    return render_template('functions.html')
+
+@app.route('/trends')
+@auth.login_required
+def trends():
+    return render_template('trends.html')
 
 # 示例 API 接口
 @app.route('/api/data', methods=['GET'])
@@ -67,6 +87,12 @@ def get_folders():
                          if f.lower().endswith(('.jpg', '.jpeg', '.png', '.gif'))]
                 folder_data[folder] = files
     return jsonify(folder_data)
+
+@app.route('/api/trends', methods=['GET'])
+def api_trends():
+    file_path = os.path.join(current_app.static_folder, 'trends.json')
+    data = read_json(file_path)
+    return jsonify(data)
 
 # --- 通用 JSON 辅助函数 ---
 def read_json(file_path):
@@ -128,7 +154,6 @@ def api_todos():
             socketio.emit('todo_updated', todos)
             return jsonify(new_data), 201
 
-
 # 后台监控函数：监控 static 下所有 .json 文件的变化
 def monitor_events():
     static_dir = app.static_folder
@@ -160,6 +185,7 @@ def monitor_events():
                                     with file_lock:
                                         with open(path, 'r', encoding='utf-8') as f:
                                             data = json.load(f)
+                                    # 事件名称为 events_updated 或 todo_updated
                                     socketio.emit(file.split('.')[0] + '_updated', data)
                                     app.logger.info("推送 %s 更新", file)
                                 except Exception as e:
@@ -171,7 +197,7 @@ def monitor_events():
                         app.logger.error("检查文件 %s 失败: %s", file, e)
         socketio.sleep(1)
 
-# 后台管理部分
+# ---------------------------后台管理部分---------------------------------
 
 # 定义数据库模型
 class Event(db.Model):
@@ -280,6 +306,7 @@ if __name__ == '__main__':
     with app.app_context():
         db.create_all()
 
+    # 异步生成缩略图（请确保 thumbnail_generator 模块和 generate_thumbnails_async 函数可用）
     input_dir = os.path.join(app.static_folder, 'images')
     output_dir = os.path.join(app.static_folder, 'thumbnails')
     threading.Thread(
@@ -290,7 +317,7 @@ if __name__ == '__main__':
     # 启动后台任务：监控 static 下所有 .json 文件的变化
     socketio.start_background_task(target=monitor_events)
 
-    # 启动 Flask 应用，启用 HTTPS（请修改为你本地的证书路径）
+    # 启动 Flask 应用，启用 HTTPS（本地的证书路径）
     ssl_context = (r'E:\OneDrive\Gits\Sandshark\flask_app\certs\cert.pem',
                    r'E:\OneDrive\Gits\Sandshark\flask_app\certs\key.pem')
-    socketio.run(app, host='0.0.0.0', port=5000, ssl_context=ssl_context)
+    socketio.run(app,debug=True, host='0.0.0.0', port=5000, ssl_context=ssl_context)
