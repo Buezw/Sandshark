@@ -83,32 +83,6 @@
 
 ---
 
-## 项目结构示例
-
-```
-.
-├── main.js                 # Electron 主进程入口，负责窗口和标签管理
-├── app.py                  # Flask 服务入口，RESTful API + SocketIO
-├── trends_crawler.py       # Playwright 爬虫脚本
-├── thumbnail_generator.py  # Pillow + 并发池处理图片缩略图
-├── templates/
-│   ├── home_page.html
-│   ├── album.html
-│   ├── browser.html
-│   ├── trends.html
-│   └── multi_json_edit.html
-├── static/
-│   ├── config.json         # 存放 BasicAuth 用户名密码等
-│   ├── events.json         # 日程事件数据 (随时间推送更新)
-│   ├── todo.json           # 待办事项
-│   ├── trends.json         # 热搜榜数据
-│   ├── images/             # 原始图片资源
-│   └── thumbnails/         # 生成的缩略图文件
-└── requirements.txt        # Python 依赖
-```
-
----
-
 ## 安装与启动
 
 1. **克隆项目：**
