@@ -15,7 +15,7 @@
       max-width: 800px;
       margin: 0 auto;
     }
-    /* 修改 header 为 flex 布局，使标题与按钮分布在两端 */
+    /* 修改 header 为 flex 布局，使标题、最后更新时间与按钮分布在两端 */
     .header {
       background: #ff5722;
       color: #fff;
@@ -28,6 +28,15 @@
       border-radius: 8px;
       margin-bottom: 20px;
       position: relative;
+    }
+    .title-container {
+      display: flex;
+      flex-direction: column;
+    }
+    .last-update {
+      font-size: 0.8em;
+      font-weight: normal;
+      margin-top: 4px;
     }
     .exit-button {
       background: #fff;
@@ -97,7 +106,10 @@
 <body>
   <div class="container">
     <div class="header">
-      <span>热搜榜</span>
+      <div class="title-container">
+        <span>热搜榜</span>
+        <span id="lastUpdate" class="last-update"></span>
+      </div>
       <button id="exitTrendsBtn" class="exit-button">退出</button>
     </div>
     <div class="sections">
@@ -144,9 +156,15 @@
       fetch('https://100.68.21.31:5000/api/trends', {credentials: 'include'})
         .then(response => response.json())
         .then(data => {
-          // data 格式为 { "rebang": [...], "google": [...] }
+          // data 格式为 { "rebang": [...], "google": [...], "last_update": "ISO 时间字符串" }
           const rebangList = document.getElementById('rebangList');
           const googleList = document.getElementById('googleList');
+          const lastUpdateSpan = document.getElementById('lastUpdate');
+          
+          // 显示最后更新时间，截取前 19 个字符（例如 2025-02-19T15:23:42）
+          if(data.last_update) {
+            lastUpdateSpan.textContent = "最后更新时间：" + data.last_update.substring(0, 19);
+          }
           
           if (data.rebang && Array.isArray(data.rebang)) {
             data.rebang.forEach((trend, index) => {

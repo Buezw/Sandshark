@@ -1,5 +1,6 @@
 from playwright.sync_api import sync_playwright
 import json, os
+from datetime import datetime
 
 def get_rebang_element_text():
     text_list = []
@@ -57,9 +58,11 @@ if __name__ == "__main__":
     if not os.path.exists(trends_dir):
         os.makedirs(trends_dir)
 
+    # 添加最后更新时间
     all_trends = {
         "rebang": rebang_trends,
-        "google": google_trends
+        "google": google_trends,
+        "last_update": datetime.now().isoformat()
     }
 
     # 保存合并的数据到 trends.json
