@@ -1,5 +1,3 @@
-（由于技术原因，联网搜索暂不可用）
-
 # Project Name
 
 This project is a cross-platform comprehensive application based on **Electron** and **Flask**, covering multiple functional modules such as a multi-tab browser, photo album management, real-time hot search crawling, JSON file editing and management, and more. The project adopts a multi-process architecture (Electron main process + Flask backend + subprocess concurrent tasks) and a frontend-backend separation communication model. It implements rich and efficient functionalities through various proprietary technologies and frameworks.
